@@ -1,0 +1,176 @@
+# İlaç profilleri — her ilaç kendi PK/PD parametrelerini taşır.
+# ka: emilim/dağılım hız sabiti (1/saat)
+# ke_mean: ortalama eliminasyon hız sabiti (1/saat)
+# vd_per_kg: dağılım hacmi (L/kg) — hastanın kilosuyla çarpılır
+# dose_mg_per_kg: kilo bazlı doz -- verilirse dose_mg yerine kullanılır
+#   (dose_mg yine de geriye dönük uyumluluk / referans hasta için tutulur)
+# emax_hr / emax_sbp: ilacın yapabileceği maksimum değişim (pozitif =
+#   düşürür, negatif = artırır -- pd.py'deki "baseline - emax*etki" formülü)
+# ec50: yarı-maksimum etki için gereken konsantrasyon (mg/L)
+# drug_class: "beta_blocker" / "vasodilator" / "positive_inotrope" --
+#   CircAdapt entegrasyonunun ilacı hangi fizyolojik mekanizmaya
+#   bağlayacağını belirler (bkz. integrate_drug_with_circadapt.py)
+# k10/k12/k21/vd_central_per_kg: opsiyonel iki-kompartmanlı IV bolus
+#   parametreleri (bkz. pk.py > plasma_concentration_two_compartment)
+# keo_hr/keo_sbp: opsiyonel etki bölgesi (effect-compartment) gecikme hız
+#   sabitleri (1/saat) -- nabız ve tansiyon etkisinin plazma konsantrasyonuna
+#   FARKLI hızlarda "yetiştiğini" modeller (bkz. pd.py > effect_compartment_concentration)
+# renal_clearance_fraction/hepatic_clearance_fraction: toplam eliminasyonun
+#   böbrek/karaciğerden atılan kısmı (0-1, varsayılan 0.0 = etkilenmez).
+#   Patient.renal_function/hepatic_function ile birlikte ke'yi ayarlar
+#   (bkz. pk.py > organ_function_adjusted_ke)
+
+beta_bloker:
+  # Esmolol -- PK parametreleri (dose_mg_per_kg, ka, ke_mean, vd_per_kg)
+  # gerçek literatürden kalibre edilmiştir; kaynaklar için README.md >
+  # "Veri Kaynakları" bölümüne bakın. emax_hr/emax_sbp/ec50 hâlâ temsili
+  # (kalibrasyon gerektiren) değerlerdir.
+  display_name: "Esmolol (literatür kalibrasyonlu)"
+  drug_class: "beta_blocker"
+  dose_mg: 38.0           # referans ~76kg hasta için (0.5 mg/kg * 76kg)
+  dose_mg_per_kg: 0.5      # 0.5 mg/kg bolus (FDA prescribing information)
+  ka: 21.0                  # dağılım t1/2 ~2 dk -> ln(2)/t1/2 (Wiest 1991)
+  ke_mean: 4.6               # eliminasyon t1/2 ~9 dk -> ln(2)/t1/2 (FDA label, Wiest 1991)
+  vd_per_kg: 2.0               # yayınlanmış pediatrik/yetişkin PK çalışmaları
+  # --- İki-kompartmanlı IV bolus modeli (Faz 4) ---
+  # alpha (dağılım, 20.79/saat) ve beta (eliminasyon, 4.62/saat) makro hız
+  # sabitleri, yukarıdaki ka/ke_mean ile AYNI literatür yarı ömürlerinden
+  # (Wiest 1991, FDA label) gelir -- bunlar gerçek veridir. Bunları üç mikro
+  # sabite (k10/k12/k21) ayırmak için EK bir varsayım gerekti: klerens
+  # CL = ke_mean*vd_per_kg = 9.2 L/saat/kg (yine gerçek veriden türetilmiş),
+  # ama santral kompartman hacmi (Vc) için esmolole özgü ayrı bir yayınlanmış
+  # değer bulunamadı -- Vc = 0.5 L/kg (Vss'nin ~dörtte biri) VARSAYILMIŞTIR.
+  # k10/k12/k21 bu varsayımla, alpha+beta ve alpha*beta'yı tam karşılayacak
+  # şekilde standart iki-kompartman denklemleriyle hesaplanmıştır.
+  k10: 18.40          # santralden eliminasyon (VARSAYILAN Vc'ye dayalı)
+  k12: 1.79             # santral -> periferik geçiş (VARSAYILAN Vc'ye dayalı)
+  k21: 5.22               # periferik -> santral dönüş (VARSAYILAN Vc'ye dayalı)
+  vd_central_per_kg: 0.5    # VARSAYIM (bkz. yukarı)
+  emax_hr: 25
+  emax_sbp: 20
+  ec50: 0.03
+  # Etki bölgesi (Keo) gecikmeleri -- TEMSİLİ değerler (Faz 5), literatürden
+  # değil. Mantık: kronotropi (nabız) beta-1 reseptörünün doğrudan, hızlı
+  # etkisidir; tansiyon değişimi ise dolaylı/downstream bir hemodinamik
+  # sonuçtur ve biraz daha gecikmeli ortaya çıkar -- bu yüzden keo_hr > keo_sbp.
+  keo_hr: 12.0   # nabız etkisi ~3.5 dk yarı-gecikmeyle plazmaya "yetişir"
+  keo_sbp: 6.0    # tansiyon etkisi ~7 dk yarı-gecikmeyle (daha yavaş)
+  # Faz 8: esmolol ERİTROSİT ESTERAZLARIYLA metabolize olur -- böbrek/
+  # karaciğer fonksiyonundan BAĞIMSIZDIR (bu, esmololün klinikte böbrek/
+  # karaciğer yetmezliği olan hastalarda bile öngörülebilir kısa etkili
+  # kalmasının nedenidir). Bu yüzden ikisi de bilinçli olarak 0.0 --
+  # Patient.renal_function/hepatic_function'ı ne kadar değiştirirseniz
+  # değiştirin, esmololün ke'si ETKİLENMEMELİDİR (bkz.
+  # tests/test_pk.py::test_esmolol_ke_unaffected_by_organ_function).
+  renal_clearance_fraction: 0.0
+  hepatic_clearance_fraction: 0.0
+
+vazodilator:
+  # Temsili/uydurma değerler -- henüz literatür kalibrasyonu yapılmadı.
+  # Gerçek veri kalibrasyonlu vazodilatör için aşağıdaki "nicardipine"
+  # girdisine bakın.
+  display_name: "Örnek Vazodilatör"
+  drug_class: "vasodilator"
+  dose_mg: 10.0
+  ka: 0.8
+  ke_mean: 0.5
+  vd_per_kg: 1.1
+  emax_hr: 8       # hafif refleks taşikardi (nabız biraz artabilir -> negatif değer kullanacağız kodda)
+  emax_sbp: 30
+  ec50: 0.05
+  # TEMSİLİ Keo değerleri (Faz 5) -- vazodilatasyon (SBP) doğrudan/hızlı,
+  # refleks taşikardi (HR) baroreseptör aracılı, dolayısıyla gecikmeli.
+  keo_hr: 3.0
+  keo_sbp: 8.0
+
+nicardipine:
+  # PK parametreleri gerçek literatürden kalibre edilmiştir:
+  # - alfa (dağılım) t1/2 = 2.7 dk, beta (ara faz) t1/2 = 44.8 dk
+  #   (Intravenous Nicardipine, Clinical Pharmacokinetics 2006;
+  #   https://link.springer.com/article/10.2165/00003495-200666130-00010)
+  # - Vd (non-kompartman) = 8.3 L/kg, Cl = 0.4 L/hr/kg (aynı kaynak)
+  # - Direkt IV bolus dozu: 30 mcg/kg (Drugs.com / DailyMed etiketi)
+  # Bu tek-kompartmanlı bolus modeli üç-üstel gerçek profili (alfa/beta/
+  # gamma) basitleştirir: gamma (terminal, 14.4 saat) fazı -- derin doku
+  # redistribüsyonu -- ihmal edilmiştir, çünkü akut hemodinamik etki
+  # zaten alfa/beta fazlarında gerçekleşir. emax_hr/emax_sbp/ec50 temsili
+  # değerlerdir (kalibrasyon gerektirir).
+  display_name: "Nikardipin (literatür kalibrasyonlu)"
+  drug_class: "vasodilator"
+  dose_mg: 2.28            # referans ~76kg hasta için (0.03 mg/kg * 76kg)
+  dose_mg_per_kg: 0.03      # 30 mcg/kg IV bolus (Drugs.com / DailyMed)
+  ka: 15.4                   # alfa t1/2 2.7 dk -> ln(2)/t1/2
+  ke_mean: 0.928               # beta t1/2 44.8 dk -> ln(2)/t1/2
+  vd_per_kg: 8.3                 # non-kompartman Vd (Springer 2006)
+  emax_hr: -6        # hafif refleks taşikardi (vazodilatasyona bağlı, negatif = nabzı artırır)
+  emax_sbp: 25
+  ec50: 0.0015
+  # TEMSİLİ Keo değerleri (Faz 5) -- SBP etkisi (doğrudan vasküler düz kas
+  # gevşemesi) hızlı; HR etkisi (refleks taşikardi, baroreseptör aracılı)
+  # daha gecikmeli ortaya çıkar.
+  keo_hr: 4.0
+  keo_sbp: 10.0
+
+dobutamine:
+  # PK parametreleri gerçek literatürden kalibre edilmiştir (t1/2 ~2.5 dk,
+  # Vd ~0.2 L/kg; Kates & Leier 1978, Clin Pharmacol Ther;
+  # https://pubmed.ncbi.nlm.nih.gov/699477/). ÖNEMLİ KISIT: dobutamin
+  # klinikte SADECE sürekli IV infüzyon olarak verilir, bolus dozu yoktur
+  # -- burada kullanılan "ka" (dağılım/denge hızı, ~1 dk kabul edilmiştir)
+  # gerçek bir literatür değeri DEĞİL, sürekli infüzyonu tek-kompartmanlı
+  # bolus modeline sığdırmak için yapılmış bir yaklaşıklıktır (esmolol/
+  # nikardipindeki gibi doğrudan bir kaynağı yok). dose_mg_per_kg,
+  # klasik 5 mcg/kg/dk infüzyonun oluşturduğu ~100 ng/mL kararlı-durum
+  # plazma konsantrasyonuna (pediatrik YBÜ çalışması; ~105 ng/mL) denk
+  # gelecek şekilde geriye doğru hesaplanmış "bolus-eşdeğeri" bir
+  # değerdir, gerçek bir klinik bolus dozu değildir. emax_hr/emax_sbp/
+  # ec50 temsili değerlerdir.
+  display_name: "Dobutamin (literatür kalibrasyonlu, bolus-eşdeğeri yaklaşıklık)"
+  drug_class: "positive_inotrope"
+  dose_mg: 2.81             # referans ~76kg hasta için (0.037 mg/kg * 76kg)
+  dose_mg_per_kg: 0.037      # ~100 ng/mL pik konsantrasyona kalibre edilmiş bolus-eşdeğeri
+  ka: 41.6                    # ~1 dk denge süresi varsayımı (YAKLAŞIKLIK, literatür değeri değil)
+  ke_mean: 16.6                 # t1/2 2.5 dk -> ln(2)/t1/2 (Kates & Leier 1978)
+  vd_per_kg: 0.2                  # Kates & Leier 1978 (kalp yetmezliği hastalarında ~0.202 L/kg)
+  emax_hr: -18       # pozitif kronotrop etki (negatif = nabzı artırır -- taşikardi riski)
+  emax_sbp: -8         # kontraktilite/debi artışına bağlı hafif tansiyon artışı (değişken, basitleştirilmiştir)
+  ec50: 0.05
+  # TEMSİLİ Keo değerleri (Faz 5) -- kronotropi/inotropi (HR) beta-1
+  # reseptörünün doğrudan etkisi, hızlı; SBP değişimi artan debinin
+  # dolaylı/downstream sonucu, daha gecikmeli.
+  keo_hr: 15.0
+  keo_sbp: 5.0
+
+digoxin:
+  # PK parametreleri, farmakolojide en iyi bilinen/standart sabitlerden
+  # biri olan digoksin verisiyle kalibre edilmiştir (herhangi bir klinik
+  # farmakoloji ders kitabı -- Goodman & Gilman, Katzung -- ile tutarlı
+  # standart değerler):
+  # - Eliminasyon yarı ömrü ~36 saat (normal böbrek fonksiyonunda)
+  # - Dağılım hacmi ~7.3 L/kg (iskelet kasında yoğun doku bağlanması)
+  # - IV yükleme dozu ~10-15 mcg/kg (klasik "digitalizasyon" dozu)
+  # - Eliminasyonun ~%65'i böbrekten DEĞİŞMEDEN atılır (bu yüzden dar
+  #   terapötik indeksli bu ilaç, böbrek yetmezliğinde TOKSİK birikir --
+  #   Faz 8'in ana gösterim noktası budur, bkz. renal_clearance_fraction)
+  # `ka` (emilim/denge hızı, ~30dk varsayılmıştır) diğer ilaçlardaki gibi
+  # bir YAKLAŞIKLIKTIR, doğrudan bir literatür değeri değildir.
+  # emax_hr/emax_sbp/ec50 temsili değerlerdir. NOT: digoksin farmakolojik
+  # olarak hem pozitif inotrop HEM negatif kronotroptur (AV düğümü
+  # yavaşlatır -- dobutaminin tam tersi bir HR yönü, ama CircAdapt
+  # entegrasyonunda kontraktilite mekanizması dobutaminle aynı olduğu
+  # için drug_class yine "positive_inotrope").
+  display_name: "Digoksin (literatür kalibrasyonlu -- böbrek fonksiyonuna duyarlı)"
+  drug_class: "positive_inotrope"
+  dose_mg: 0.91              # referans ~76kg hasta için (0.012 mg/kg * 76kg)
+  dose_mg_per_kg: 0.012       # ~10-15 mcg/kg IV yükleme dozu aralığının ortası
+  ka: 1.4                       # ~30 dk denge süresi varsayımı (YAKLAŞIKLIK)
+  ke_mean: 0.01925                # t1/2 36 saat -> ln(2)/t1/2
+  vd_per_kg: 7.3                    # standart ders kitabı değeri
+  emax_hr: 15         # negatif kronotrop (AV düğümü yavaşlatma -- pozitif değer, nabzı DÜŞÜRÜR)
+  emax_sbp: 5           # digoksinin doğrudan BP etkisi minimal/değişken, küçük temsili değer
+  ec50: 0.0008
+  keo_hr: 0.5    # TEMSİLİ -- digoksinin etkisi saatler içinde yavaşça gelişir (dakikalar değil)
+  keo_sbp: 0.3
+  # Faz 8'in ana noktası: digoksin ağırlıklı olarak BÖBREKTEN atılır.
+  renal_clearance_fraction: 0.65   # ~%65 değişmeden böbrekten atılıyor (standart ders kitabı değeri)
+  hepatic_clearance_fraction: 0.0    # ihmal edilebilir hepatik/biliyer katkı (basitleştirilmiştir)

@@ -1,0 +1,148 @@
+# Faz 9 — Gerçek İlaç Veritabanı Entegrasyonu
+# ==============================================
+#
+# Bu dosya, drugs.yaml'dan FARKLI bir amaç taşıyor: her ilaç girdisine
+# `source_url` ve `retrieved_date` alanları ekleyerek VERİ İZLENEBİLİRLİĞİ
+# (provenance) sağlıyor -- Faz 14'ün "her sayının kaynağı belli olmalı"
+# felsefesinin ön çalışması.
+#
+# Nasıl üretildi: her ilaç için önce `python drug_lookup.py` (veya
+# `drug_lookup.summarize_for_calibration()`) ile RxNorm'dan RxCUI ve
+# openFDA'dan ilgili etiket metni ÇEKİLDİ, sonra bu metin OKUNARAK PK
+# parametreleri ELLE kalibre edildi (tam otomatik sayı çıkarımı
+# yapılmadı -- bkz. drug_lookup.py docstring'i, bunun neden güvenilmez
+# olduğu açıklanıyor). `source_url`, o ilacın verisini doğrulamak için
+# kullanılan GERÇEK API sorgusunu gösteriyor -- kopyala-yapıştır
+# çalıştırılabilir.
+#
+# Alan anlamları için configs/drugs.yaml'ın başındaki yorum bloğuna bakın
+# (aynı Drug şemasını kullanıyor, sadece source_url/retrieved_date/
+# calibration_notes eklendi -- bunlar Drug dataclass'ının parçası DEĞİL,
+# sadece bu YAML dosyasında duran ek belgeleme alanları, load_drugs()
+# onları okumaz).
+
+esmolol:
+  display_name: "Esmolol"
+  drug_class: "beta_blocker"
+  rxcui: "49737"
+  source_url: "https://api.fda.gov/drug/label.json?search=openfda.generic_name:esmolol&limit=1"
+  retrieved_date: "2026-07-22"
+  calibration_notes: >
+    FDA etiketi (clinical_pharmacology) doğrudan "elimination half-life
+    after intravenous infusion is approximately 9 minutes" diyor --
+    Faz 1'de Wiest 1991'den türetilen 9 dk'lık eliminasyon yarı ömrünü
+    BAĞIMSIZ olarak doğruluyor. Dozaj bölümü: "Optional loading dose:
+    500 mcg per kg infused over one minute" -- Faz 1'deki 0.5 mg/kg
+    değerini de doğrudan doğruluyor.
+  dose_mg: 38.0              # referans ~76kg hasta için (0.5 mg/kg * 76kg)
+  dose_mg_per_kg: 0.5
+  ka: 21.0
+  ke_mean: 4.6
+  vd_per_kg: 2.0
+  emax_hr: 25
+  emax_sbp: 20
+  ec50: 0.03
+
+metoprolol:
+  display_name: "Metoprolol (IV, literatür kalibrasyonlu)"
+  drug_class: "beta_blocker"
+  rxcui: "6918"
+  source_url: "https://api.fda.gov/drug/label.json?search=openfda.generic_name:metoprolol+AND+openfda.route:INTRAVENOUS&limit=1"
+  retrieved_date: "2026-07-22"
+  calibration_notes: >
+    FDA etiketi (dosage_and_administration): "three bolus injections of
+    5 mg ... at approximately 2-minute intervals" -> toplam 15 mg
+    yükleme dozu (dose_mg_per_kg=0.2 * 76kg=15.2mg, gerçek dozla
+    neredeyse birebir). clinical_pharmacology: "maximum beta blockade
+    was achieved at approximately 20 minutes" (10 dk'lık infüzyon
+    sonrası) -- ka, modelin piki ~20 dk civarında yapması için
+    kalibre edildi. Eliminasyon yarı ömrü (~3.5 saat) ve dağılım hacmi
+    (~4.4 L/kg) etikette AYRI bir PK tablosunda verilmiyor -- standart
+    klinik farmakoloji ders kitabı (Goodman & Gilman / Katzung)
+    değerleridir, esmolol/nikardipin gibi tek bir birincil kaynağa
+    doğrudan bağlanamıyor.
+  dose_mg: 15.2               # referans ~76kg hasta için (0.2 mg/kg * 76kg, ~gerçek 15mg toplam yükleme dozu)
+  dose_mg_per_kg: 0.2       # 3x5mg bolus toplamı (FDA etiketi, gerçek)
+  ka: 2.77                    # ~20 dk pik zamanı (FDA etiketi, gerçek zamanlama)
+  ke_mean: 0.198                 # t1/2 ~3.5 saat (standart ders kitabı)
+  vd_per_kg: 4.4                    # standart ders kitabı
+  emax_hr: 20
+  emax_sbp: 15
+  ec50: 0.019
+
+sodium_nitroprusside:
+  display_name: "Sodyum Nitroprussid (literatür kalibrasyonlu, bolus-eşdeğeri yaklaşıklık)"
+  drug_class: "vasodilator"
+  rxcui: "9895"
+  source_url: "https://api.fda.gov/drug/label.json?search=openfda.generic_name:%22sodium%20nitroprusside%22&limit=1"
+  retrieved_date: "2026-07-22"
+  calibration_notes: >
+    FDA etiketi (clinical_pharmacology) doğrudan: "sodium nitroprusside's
+    resulting circulatory half-life is about 2 minutes" VE dağılım
+    hacminin "approximately coextensive with the extracellular space"
+    olduğu belirtiliyor -- bu yüzden vd_per_kg=0.2 L/kg (tipik
+    ekstrasellüler sıvı hacmi) doğrudan etiket metninden türetildi,
+    uydurma değil. ÖNEMLİ KISIT: nitroprussid klinikte SADECE sürekli
+    IV infüzyon olarak verilir (0.3-10 mcg/kg/dk), bolus dozu yoktur
+    -- dose_mg_per_kg, dobutamin'deki gibi bir "bolus-eşdeğeri"
+    yaklaşıklıktır, gerçek bir klinik dozu temsil etmez. Etiket ayrıca
+    "slight increases in heart rate" (hafif refleks taşikardi) ve hem
+    arteriyel HEM venöz dilatasyon (nikardipinden farklı olarak hem
+    önyük hem ardyük düşürür) belirtiyor -- emax_hr küçük, emax_sbp
+    büyük tutuldu.
+  dose_mg: 0.76                # referans ~76kg hasta için (0.01 mg/kg * 76kg)
+  dose_mg_per_kg: 0.01       # bolus-eşdeğeri YAKLAŞIKLIK (gerçek klinik dozu değil)
+  ka: 30.0                     # ~1.4 dk denge süresi (etiketteki "immediate" onset ile tutarlı, YAKLAŞIKLIK)
+  ke_mean: 20.79                  # t1/2 ~2 dk -> ln(2)/t1/2 (FDA etiketi, GERÇEK)
+  vd_per_kg: 0.2                     # ekstrasellüler sıvı hacmi (FDA etiketi, GERÇEK ifadeden türetildi)
+  emax_hr: -3         # hafif refleks taşikardi (FDA etiketi: "slight increases in heart rate")
+  emax_sbp: 40           # çok potent, hızlı titre edilebilir antihipertansif (FDA etiketi)
+  ec50: 0.011
+
+dobutamine:
+  display_name: "Dobutamin (literatür kalibrasyonlu, bolus-eşdeğeri yaklaşıklık)"
+  drug_class: "positive_inotrope"
+  rxcui: "3616"
+  source_url: "https://api.fda.gov/drug/label.json?search=openfda.generic_name:dobutamine&limit=1"
+  retrieved_date: "2026-07-22"
+  calibration_notes: >
+    FDA etiketi (dosage_and_administration): "Infusion of dobutamine
+    should be started at a low rate (0.5 to 1.0 mcg/kg/min)" -- Faz 2'de
+    Kates & Leier 1978'den türetilen ~5 mcg/kg/dk kararlı-durum
+    kalibrasyonuyla aynı büyüklük mertebesinde (klinik doz aralığının
+    içinde), bağımsız bir doğrulama. Detaylı PK türetimi için
+    configs/drugs.yaml > dobutamine girdisine bakın (aynı değerler).
+  dose_mg: 2.81
+  dose_mg_per_kg: 0.037
+  ka: 41.6
+  ke_mean: 16.6
+  vd_per_kg: 0.2
+  emax_hr: -18
+  emax_sbp: -8
+  ec50: 0.05
+
+digoxin:
+  display_name: "Digoksin (literatür kalibrasyonlu -- böbrek fonksiyonuna duyarlı)"
+  drug_class: "positive_inotrope"
+  rxcui: "3407"
+  source_url: "https://api.fda.gov/drug/label.json?search=openfda.generic_name:digoxin&limit=1"
+  retrieved_date: "2026-07-22"
+  calibration_notes: >
+    FDA etiketi (dosage_and_administration) doğrudan: "it is important
+    to consider factors that affect digoxin blood levels (e.g., body
+    weight, age, RENAL FUNCTION, concomitant drugs) since toxic levels
+    of digoxin are only slightly higher than therapeutic levels" --
+    Faz 8'in renal_clearance_fraction mekanizmasının TAM OLARAK neden
+    var olduğunu, FDA'nın kendi etiketinden bağımsız olarak doğruluyor.
+    Detaylı PK türetimi için configs/drugs.yaml > digoxin girdisine
+    bakın (aynı değerler).
+  dose_mg: 0.91
+  dose_mg_per_kg: 0.012
+  ka: 1.4
+  ke_mean: 0.01925
+  vd_per_kg: 7.3
+  emax_hr: 15
+  emax_sbp: 5
+  ec50: 0.0008
+  renal_clearance_fraction: 0.65
+  hepatic_clearance_fraction: 0.0

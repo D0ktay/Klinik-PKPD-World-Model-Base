@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+outputs/*.png
+.pytest_cache/
+.vscode/settings.json

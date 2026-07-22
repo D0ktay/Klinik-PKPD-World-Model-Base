@@ -1,0 +1,82 @@
+# Hasta profilleri — her biri gerçek bir "sanal hasta" tanımlar.
+# İstediğin kadar hasta ekleyebilirsin, kod otomatik hepsini okur.
+
+hasta_a:
+  name: "Hasta A"
+  weight_kg: 76
+  height_cm: 175
+  age: 45
+  blood_type: "A Rh+"
+  baseline_hr: 78
+  baseline_sbp: 125
+  baseline_dbp: 80
+  baseline_spo2: 97
+
+hasta_b:
+  name: "Hasta B (yaşlı, düşük kilo)"
+  weight_kg: 58
+  height_cm: 160
+  age: 72
+  blood_type: "0 Rh-"
+  baseline_hr: 85
+  baseline_sbp: 140
+  baseline_dbp: 88
+  baseline_spo2: 95
+
+# Faz 11: elektrolit/lab verisinin kalp üzerindeki etkisini göstermek için
+# -- aksi belirtilmedikçe tüm alanlar hasta_a ile aynı, sadece potasyum/
+# kalsiyum değişti. compare_electrolyte_effects.py ile karşılaştırın.
+hasta_c_hiperkalemi:
+  name: "Hasta C (hiperkalemik -- böbrek yetmezliği)"
+  weight_kg: 76
+  height_cm: 175
+  age: 45
+  blood_type: "A Rh+"
+  baseline_hr: 78
+  baseline_sbp: 125
+  baseline_dbp: 80
+  baseline_spo2: 97
+  renal_function: 0.3       # hiperkaleminin tipik nedeni -- böbrek yetmezliği
+  potassium_mEqL: 6.5         # normal 3.5-5.0 -- belirgin hiperkalemi (EKG değişiklikleri beklenir)
+  calcium_mgdL: 9.5
+
+hasta_d_hipokalsemi:
+  name: "Hasta D (hipokalsemik)"
+  weight_kg: 76
+  height_cm: 175
+  age: 45
+  blood_type: "A Rh+"
+  baseline_hr: 78
+  baseline_sbp: 125
+  baseline_dbp: 80
+  baseline_spo2: 97
+  potassium_mEqL: 4.25
+  calcium_mgdL: 6.8            # normal 8.5-10.5 -- belirgin hipokalsemi (azalmış kontraktilite beklenir)
+
+# Faz 12: kronik komorbidite profilleri -- aksi belirtilmedikçe tüm alanlar
+# hasta_a ile aynı, sadece comorbidity eklendi. compare_comorbidity_effects.py
+# ile aynı ilaç dozunun sağlıklı hastaya karşı bu hastalarda NASIL FARKLI
+# sonuç verdiğini karşılaştırın.
+hasta_e_kalp_yetmezligi:
+  name: "Hasta E (sistolik kalp yetmezliği, EF azalmış)"
+  weight_kg: 76
+  height_cm: 175
+  age: 68
+  blood_type: "A Rh+"
+  baseline_hr: 88          # kompanse taşikardi -- düşük atım hacmini telafi etmeye çalışıyor
+  baseline_sbp: 108          # düşük kardiyak debiye bağlı düşük bazal tansiyon
+  baseline_dbp: 70
+  baseline_spo2: 94
+  comorbidity: "heart_failure"
+
+hasta_f_hipertansif:
+  name: "Hasta F (kronik hipertansif kalp)"
+  weight_kg: 82
+  height_cm: 172
+  age: 60
+  blood_type: "0 Rh+"
+  baseline_hr: 76
+  baseline_sbp: 162          # kronik olarak yüksek bazal tansiyon
+  baseline_dbp: 98
+  baseline_spo2: 97
+  comorbidity: "hypertension"
