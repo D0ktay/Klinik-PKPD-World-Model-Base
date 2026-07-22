@@ -31,6 +31,7 @@ from worldmodel.provenance import provenance_report, SOURCE_TYPE_EMOJI
 from worldmodel.report import export_report
 from worldmodel.clinical_metrics import ejection_fraction, cardiac_output, classify_cardiac_function
 from integrate_drug_with_circadapt import run_comparison, build_comparison_figure
+from circadapt.error import CircAdaptException
 
 st.set_page_config(page_title="Mini Klinik Dünya Modeli", layout="wide", page_icon="🩺")
 
@@ -230,26 +231,36 @@ with tab_sim:
             mc_result = run_monte_carlo(patient, drug, n_realizations=n_runs)
             mc_stats = summarize(mc_result)
 
-        with st.spinner(
-            "CircAdapt kalp simülasyonu çalıştırılıyor (baseline + ilaçlı) -- "
-            "gerçek kalp-damar mekaniği modeli olduğu için bu adım birkaç saniyeden "
-            "birkaç dakikaya kadar sürebilir, lütfen bekleyin..."
-        ):
-            heart_result = run_comparison(patient, drug)
+        try:
+            with st.spinner(
+                "CircAdapt kalp simülasyonu çalıştırılıyor (baseline + ilaçlı) -- "
+                "gerçek kalp-damar mekaniği modeli olduğu için bu adım birkaç saniyeden "
+                "birkaç dakikaya kadar sürebilir, lütfen bekleyin..."
+            ):
+                heart_result = run_comparison(patient, drug)
 
-        with st.spinner("En iyi doz önerisi hesaplanıyor (istatistiksel + mekanik risk)..."):
-            dose_rec = recommend_dose(patient, drug, circadapt_results=heart_result)
+            with st.spinner("En iyi doz önerisi hesaplanıyor (istatistiksel + mekanik risk)..."):
+                dose_rec = recommend_dose(patient, drug, circadapt_results=heart_result)
 
-        st.session_state["sim"] = {
-            "dose_rec": dose_rec,
-            "mc_result": mc_result,
-            "mc_stats": mc_stats,
-            "heart_result": heart_result,
-            "drug_name": drug.display_name,
-            "drug": drug,
-            "patient": patient,
-            "inputs": current_inputs,
-        }
+            st.session_state["sim"] = {
+                "dose_rec": dose_rec,
+                "mc_result": mc_result,
+                "mc_stats": mc_stats,
+                "heart_result": heart_result,
+                "drug_name": drug.display_name,
+                "drug": drug,
+                "patient": patient,
+                "inputs": current_inputs,
+            }
+        except CircAdaptException:
+            st.error(
+                "CircAdapt (gerçek kalp-damar mekaniği motoru), bu hasta/ilaç "
+                "kombinasyonunda sayısal olarak kararsız hale geldi (fiziksel "
+                "olarak aşırı bir senaryo -- ör. çok yüksek doz, uç bir "
+                "komorbidite/elektrolit kombinasyonu). Bu, CircAdapt'in kendi "
+                "çözücüsünün bir sınırı -- lütfen dozu, hastayı ya da ilacı "
+                "değiştirip tekrar deneyin."
+            )
 
     if "sim" not in st.session_state:
         st.info("Sonuçları görmek için yukarıdaki butona basın.")
@@ -587,11 +598,18 @@ with tab_observe:
         "ilaçsız (baseline) ve pik etki anı."
     )
     if st.button("🫀 Gerçek Kalp Modeliyle Göster"):
-        with st.spinner("CircAdapt çalıştırılıyor..."):
-            st.session_state["observe_heart"] = {
-                "result": run_comparison(patient, drug),
-                "inputs": current_inputs,
-            }
+        try:
+            with st.spinner("CircAdapt çalıştırılıyor..."):
+                st.session_state["observe_heart"] = {
+                    "result": run_comparison(patient, drug),
+                    "inputs": current_inputs,
+                }
+        except CircAdaptException:
+            st.error(
+                "CircAdapt bu hasta/ilaç kombinasyonunda sayısal olarak "
+                "kararsız hale geldi -- lütfen dozu, hastayı ya da ilacı "
+                "değiştirip tekrar deneyin."
+            )
 
     if "observe_heart" in st.session_state:
         oh = st.session_state["observe_heart"]

@@ -55,6 +55,35 @@ from worldmodel.pd import (
 )
 
 from circadapt import VanOsta2024
+from circadapt.error import CircAdaptException
+
+
+def run_stable(model, warm_up_beats: int = 5) -> None:
+    """
+    model.run(stable=True) sarmalayıcısı -- CircAdapt'in kendi çözücüsü
+    (derlenmiş, platforma özgü bir C++ uzantısı) bazı hasta/ilaç
+    kombinasyonlarında sayısal olarak KARARSIZ hale gelip NaN üretebiliyor
+    (`circadapt.error.ModelCrashed`). Bu, aynı parametrelerle bir
+    platformda (ör. Windows) stabil kalıp başka bir platformda (ör.
+    Linux) çökebilen, derleyici/kayan-nokta farklarından kaynaklanan
+    BİLİNEN bir CircAdapt davranışı -- kütüphanenin kendi dokümanı da bu
+    hatanın YAKALANIP ele alınmasını öneriyor, "asla olmaması gereken" bir
+    durum değil.
+
+    İlk deneme çöker/kararsız kalırsa, modele birkaç SABİT atım (stable=
+    False) ile bir "ısınma" turu yaptırıp tekrar dener -- ODE çözücüsüne
+    doğrudan "stabil olana kadar koş" yerine daha yumuşak bir başlangıç
+    noktası vermek, bazı sınır-kararlılığındaki durumları düzeltebiliyor.
+    İkinci deneme de başarısız olursa, orijinal hatayı olduğu gibi
+    yukarı fırlatır -- çağıran (Streamlit) bunu yakalayıp kullanıcıya
+    okunabilir bir mesaj gösterir, uygulamanın tamamı çökmez.
+    """
+    try:
+        model.run(stable=True)
+    except CircAdaptException:
+        model.run(n_beats=warm_up_beats, stable=False)
+        model.run(stable=True)
+
 
 # Ventrikül duvarlarının Patch.Sf_act dizisindeki konumları
 # (dizi sırası: pLa0, pRa0, pLv0, pSv0, pRv0 -- kurulum testinde doğrulandı)
@@ -255,7 +284,7 @@ def run_baseline(patient=None):
         calibrate_circadapt_to_patient(model, patient)
         apply_patient_electrolytes_to_circadapt(model, patient)
         apply_comorbidity_to_circadapt(model, patient.comorbidity)
-    model.run(stable=True)
+    run_stable(model)
     return model
 
 
@@ -273,7 +302,7 @@ def run_with_drug(patient, drug, drug_effect):
 
     apply_drug_effect_to_circadapt(model, drug_class, hr_fraction, sbp_fraction)
 
-    model.run(stable=True)
+    run_stable(model)
     return model
 
 
@@ -333,7 +362,7 @@ def run_with_multiple_drugs(patient, drugs, drug_effects):
         drug_class = drug.drug_class or "beta_blocker"
         apply_drug_effect_to_circadapt(model, drug_class, hr_fraction, sbp_fraction)
 
-    model.run(stable=True)
+    run_stable(model)
     return model
 
 

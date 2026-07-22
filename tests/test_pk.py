@@ -887,3 +887,45 @@ def test_heart_failure_comorbidity_produces_genuinely_lower_ef_than_healthy():
 
     assert ef_hf < ef_healthy
     assert ef_healthy >= 55.0  # sağlıklı hasta normal aralıkta olmalı
+
+
+# --- CircAdapt sayısal kararsızlığına (ModelCrashed) dayanıklılık ---
+
+def test_run_stable_retries_once_with_warm_up_beats_then_succeeds():
+    """CircAdapt'in kendi çözücüsü platforma göre (ör. Linux derlemesi)
+    bazen ilk denemede sayısal olarak kararsız kalıp NaN üretebiliyor
+    (circadapt.error.ModelCrashed) -- bu, kütüphanenin kendi dokümanının
+    da 'yakalayıp ele alın' dediği bilinen bir davranış. run_stable(),
+    ilk deneme çökerse modele birkaç sabit atımlık bir 'ısınma' turu
+    yaptırıp tekrar dener."""
+    import integrate_drug_with_circadapt as idc
+    from circadapt.error import ModelCrashed
+
+    class FakeModel:
+        def __init__(self):
+            self.calls = []
+
+        def run(self, n_beats=1, stable=False):
+            self.calls.append((n_beats, stable))
+            if stable and len(self.calls) == 1:
+                raise ModelCrashed()
+
+    model = FakeModel()
+    idc.run_stable(model)
+    assert model.calls == [(1, True), (5, False), (1, True)]
+
+
+def test_run_stable_reraises_if_still_crashed_after_retry():
+    import integrate_drug_with_circadapt as idc
+    from circadapt.error import ModelCrashed
+
+    class AlwaysCrashingModel:
+        def run(self, n_beats=1, stable=False):
+            if stable:
+                raise ModelCrashed()
+
+    try:
+        idc.run_stable(AlwaysCrashingModel())
+        assert False, "ModelCrashed tekrar fırlatılmalıydı"
+    except ModelCrashed:
+        pass
