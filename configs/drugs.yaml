@@ -32,7 +32,7 @@ beta_bloker:
   ka: 21.0                  # dağılım t1/2 ~2 dk -> ln(2)/t1/2 (Wiest 1991)
   ke_mean: 4.6               # eliminasyon t1/2 ~9 dk -> ln(2)/t1/2 (FDA label, Wiest 1991)
   vd_per_kg: 2.0               # yayınlanmış pediatrik/yetişkin PK çalışmaları
-  # --- İki-kompartmanlı IV bolus modeli (Faz 4) ---
+  # --- İki-kompartmanlı IV bolus modeli ---
   # alpha (dağılım, 20.79/saat) ve beta (eliminasyon, 4.62/saat) makro hız
   # sabitleri, yukarıdaki ka/ke_mean ile AYNI literatür yarı ömürlerinden
   # (Wiest 1991, FDA label) gelir -- bunlar gerçek veridir. Bunları üç mikro
@@ -49,13 +49,13 @@ beta_bloker:
   emax_hr: 25
   emax_sbp: 20
   ec50: 0.03
-  # Etki bölgesi (Keo) gecikmeleri -- TEMSİLİ değerler (Faz 5), literatürden
+  # Etki bölgesi (Keo) gecikmeleri -- TEMSİLİ değerler, literatürden
   # değil. Mantık: kronotropi (nabız) beta-1 reseptörünün doğrudan, hızlı
   # etkisidir; tansiyon değişimi ise dolaylı/downstream bir hemodinamik
   # sonuçtur ve biraz daha gecikmeli ortaya çıkar -- bu yüzden keo_hr > keo_sbp.
   keo_hr: 12.0   # nabız etkisi ~3.5 dk yarı-gecikmeyle plazmaya "yetişir"
   keo_sbp: 6.0    # tansiyon etkisi ~7 dk yarı-gecikmeyle (daha yavaş)
-  # Faz 8: esmolol ERİTROSİT ESTERAZLARIYLA metabolize olur -- böbrek/
+  # Esmolol ERİTROSİT ESTERAZLARIYLA metabolize olur -- böbrek/
   # karaciğer fonksiyonundan BAĞIMSIZDIR (bu, esmololün klinikte böbrek/
   # karaciğer yetmezliği olan hastalarda bile öngörülebilir kısa etkili
   # kalmasının nedenidir). Bu yüzden ikisi de bilinçli olarak 0.0 --
@@ -78,7 +78,7 @@ vazodilator:
   emax_hr: 8       # hafif refleks taşikardi (nabız biraz artabilir -> negatif değer kullanacağız kodda)
   emax_sbp: 30
   ec50: 0.05
-  # TEMSİLİ Keo değerleri (Faz 5) -- vazodilatasyon (SBP) doğrudan/hızlı,
+  # TEMSİLİ Keo değerleri -- vazodilatasyon (SBP) doğrudan/hızlı,
   # refleks taşikardi (HR) baroreseptör aracılı, dolayısıyla gecikmeli.
   keo_hr: 3.0
   keo_sbp: 8.0
@@ -105,7 +105,7 @@ nicardipine:
   emax_hr: -6        # hafif refleks taşikardi (vazodilatasyona bağlı, negatif = nabzı artırır)
   emax_sbp: 25
   ec50: 0.0015
-  # TEMSİLİ Keo değerleri (Faz 5) -- SBP etkisi (doğrudan vasküler düz kas
+  # TEMSİLİ Keo değerleri -- SBP etkisi (doğrudan vasküler düz kas
   # gevşemesi) hızlı; HR etkisi (refleks taşikardi, baroreseptör aracılı)
   # daha gecikmeli ortaya çıkar.
   keo_hr: 4.0
@@ -135,7 +135,7 @@ dobutamine:
   emax_hr: -18       # pozitif kronotrop etki (negatif = nabzı artırır -- taşikardi riski)
   emax_sbp: -8         # kontraktilite/debi artışına bağlı hafif tansiyon artışı (değişken, basitleştirilmiştir)
   ec50: 0.05
-  # TEMSİLİ Keo değerleri (Faz 5) -- kronotropi/inotropi (HR) beta-1
+  # TEMSİLİ Keo değerleri -- kronotropi/inotropi (HR) beta-1
   # reseptörünün doğrudan etkisi, hızlı; SBP değişimi artan debinin
   # dolaylı/downstream sonucu, daha gecikmeli.
   keo_hr: 15.0
@@ -151,7 +151,7 @@ digoxin:
   # - IV yükleme dozu ~10-15 mcg/kg (klasik "digitalizasyon" dozu)
   # - Eliminasyonun ~%65'i böbrekten DEĞİŞMEDEN atılır (bu yüzden dar
   #   terapötik indeksli bu ilaç, böbrek yetmezliğinde TOKSİK birikir --
-  #   Faz 8'in ana gösterim noktası budur, bkz. renal_clearance_fraction)
+  #   bkz. renal_clearance_fraction)
   # `ka` (emilim/denge hızı, ~30dk varsayılmıştır) diğer ilaçlardaki gibi
   # bir YAKLAŞIKLIKTIR, doğrudan bir literatür değeri değildir.
   # emax_hr/emax_sbp/ec50 temsili değerlerdir. NOT: digoksin farmakolojik
@@ -171,6 +171,6 @@ digoxin:
   ec50: 0.0008
   keo_hr: 0.5    # TEMSİLİ -- digoksinin etkisi saatler içinde yavaşça gelişir (dakikalar değil)
   keo_sbp: 0.3
-  # Faz 8'in ana noktası: digoksin ağırlıklı olarak BÖBREKTEN atılır.
+  # Digoksin ağırlıklı olarak BÖBREKTEN atılır.
   renal_clearance_fraction: 0.65   # ~%65 değişmeden böbrekten atılıyor (standart ders kitabı değeri)
   hepatic_clearance_fraction: 0.0    # ihmal edilebilir hepatik/biliyer katkı (basitleştirilmiştir)

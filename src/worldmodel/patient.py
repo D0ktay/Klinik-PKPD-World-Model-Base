@@ -52,7 +52,7 @@ class Patient:
 
     @property
     def has_abnormal_electrolytes(self) -> bool:
-        """recommend_dose()'un otomatik uyarı üretmesi için kullanılır (Faz 11)."""
+        """recommend_dose()'un otomatik uyarı üretmesi için kullanılır."""
         return not (3.5 <= self.potassium_mEqL <= 5.0) or not (8.5 <= self.calcium_mgdL <= 10.5)
 
 
@@ -111,7 +111,7 @@ def load_drugs(path: str) -> dict[str, Drug]:
     return {key: Drug(**vals) for key, vals in raw.items()}
 
 
-# Faz 9: configs/drugs_verified.yaml, Drug dataclass alanlarının yanında
+# configs/drugs_verified.yaml, Drug dataclass alanlarının yanında
 # izlenebilirlik (provenance) alanları da içerir -- bunlar Drug'ın parçası
 # DEĞİL, bu yüzden Drug(**vals) çağrılmadan önce ayrıştırılmaları gerekir.
 _PROVENANCE_FIELDS = {"rxcui", "source_url", "retrieved_date", "calibration_notes"}
@@ -128,7 +128,7 @@ def load_verified_drugs(path: str) -> dict[str, dict]:
     load_drugs()'tan farkı budur -- drugs.yaml'daki kaynak bilgisi sadece
     YAML yorumu olarak duruyor (insan okuyabilir, program okuyamaz);
     burada source_url/retrieved_date birer VERİ alanı, programatik olarak
-    erişilebilir (Faz 14'ün audit trail'i için gerekli).
+    erişilebilir (audit trail için gerekli).
     """
     with open(path, "r", encoding="utf-8") as f:
         raw = yaml.safe_load(f)

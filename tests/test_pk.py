@@ -79,7 +79,7 @@ def test_dose_mg_used_when_dose_mg_per_kg_absent():
 def test_all_configured_drugs_have_a_known_drug_class():
     drugs = load_drugs(os.path.join(os.path.dirname(__file__), "..", "configs", "drugs.yaml"))
     known_classes = {"beta_blocker", "vasodilator", "positive_inotrope"}
-    assert len(drugs) >= 4, "configs/drugs.yaml içinde en az 4 ilaç bekleniyor (Faz 2)"
+    assert len(drugs) >= 4, "configs/drugs.yaml içinde en az 4 ilaç bekleniyor"
     for key, drug in drugs.items():
         assert drug.drug_class in known_classes, f"{key}: bilinmeyen drug_class {drug.drug_class!r}"
 
@@ -90,7 +90,7 @@ def test_new_drugs_use_weight_based_dosing():
         assert drugs[key].dose_mg_per_kg is not None, f"{key} kilo bazlı dozlamalı olmalı"
 
 
-# --- İki-kompartmanlı IV bolus modeli (Faz 4) ---
+# --- İki-kompartmanlı IV bolus modeli ---
 #
 # NOT: Roadmap'te "t=0'da konsantrasyon=0 olduğunu doğrula" isteniyordu,
 # ama bu YANLIŞ bir beklenti -- gerçek bir IV bolus, t=0'da konsantrasyonu
@@ -171,7 +171,7 @@ def test_run_monte_carlo_two_compartment_requires_k10():
         pass
 
 
-# --- Etki bölgesi (Keo) gecikmesi (Faz 5) ---
+# --- Etki bölgesi (Keo) gecikmesi ---
 
 def test_effect_compartment_starts_at_zero_and_stays_non_negative():
     t = np.linspace(0, 2, 200)
@@ -197,7 +197,7 @@ def test_larger_keo_tracks_plasma_concentration_more_closely():
 
 
 def test_different_keo_produces_different_peak_timing():
-    """Faz 5'in ana iddiası: farklı keo_hr/keo_sbp, farklı zamanlama üretir."""
+    """Ana iddia: farklı keo_hr/keo_sbp, farklı zamanlama üretir."""
     t = np.linspace(0, 1, 1000)
     conc = plasma_concentration(t, dose_mg=38, ka=21.0, ke=4.6, weight_kg=76, vd_per_kg=2.0)
 
@@ -272,8 +272,8 @@ def test_run_reference_trace_is_deterministic_and_noise_free():
 
 def test_run_reference_trace_starts_at_patient_baseline():
     """t=0'da henüz hiç etki yok (konsantrasyon sıfır) -- nabız/tansiyon
-    hastanın KENDİ bazal değerleriyle başlamalı (bkz. Görev A: CircAdapt'in
-    de aynı ilkeyle kalibre edilmesi gerektiği bulgusu, burada PK/PD
+    hastanın KENDİ bazal değerleriyle başlamalı (bkz. CircAdapt'in de
+    aynı ilkeyle kalibre edilmesi gerektiği bulgusu, burada PK/PD
     motorunun da baştan beri doğru yaptığı şey)."""
     patients = load_patients(os.path.join(os.path.dirname(__file__), "..", "configs", "patients.yaml"))
     drugs = load_drugs(os.path.join(os.path.dirname(__file__), "..", "configs", "drugs.yaml"))
@@ -295,7 +295,7 @@ def test_run_reference_trace_effect_fraction_bounded():
     assert np.all(trace["effect_sbp"] >= 0) and np.all(trace["effect_sbp"] <= 1.3)
 
 
-# --- Doz önerisi: istatistiksel + mekanik risk birleşimi (Faz 6) ---
+# --- Doz önerisi: istatistiksel + mekanik risk birleşimi ---
 
 def _fake_circadapt_results(lvedv_base_ml: float, lvedv_drug_ml: float) -> dict:
     """recommend_dose'un beklediği minimum sözlük şeklini üretir --
@@ -349,7 +349,7 @@ def test_recommend_dose_no_mechanical_risk_when_lvedv_increase_below_threshold()
     assert rec["dose_mg"] == rec["statistical_dose_mg"]
 
 
-# --- Böbrek/karaciğer fonksiyonu (Faz 8) ---
+# --- Böbrek/karaciğer fonksiyonu ---
 
 def _make_patient(**overrides) -> Patient:
     base = dict(name="X", weight_kg=76, height_cm=175, age=45, blood_type="A",
@@ -420,14 +420,14 @@ def test_digoxin_accumulates_more_with_impaired_renal_function():
     assert late_conc_impaired > late_conc_normal * 1.5
 
 
-# --- Gerçek ilaç veritabanı entegrasyonu (Faz 9) ---
+# --- Gerçek ilaç veritabanı entegrasyonu ---
 
 VERIFIED_DRUGS_PATH = os.path.join(os.path.dirname(__file__), "..", "configs", "drugs_verified.yaml")
 
 
 def test_load_verified_drugs_returns_working_drug_objects():
     verified = load_verified_drugs(VERIFIED_DRUGS_PATH)
-    assert len(verified) >= 5, "Faz 9'da en az 5 gerçek ilaç bekleniyor"
+    assert len(verified) >= 5, "en az 5 gerçek ilaç bekleniyor"
     for key, entry in verified.items():
         assert isinstance(entry["drug"], Drug), f"{key}: 'drug' bir Drug nesnesi olmalı"
         assert entry["drug"].display_name, f"{key}: display_name boş olamaz"
@@ -499,7 +499,7 @@ def test_fetch_fda_label_sections_quotes_multiword_drug_names():
     )
 
 
-# --- Çoklu ilaç etkileşimi / polifarmasi (Faz 10) ---
+# --- Çoklu ilaç etkileşimi / polifarmasi ---
 
 def test_polypharmacy_two_negative_chronotropes_lower_hr_more_than_either_alone():
     """Tehlikeli kombinasyon senaryosu: esmolol + digoksin, ikisi de nabzı
@@ -580,7 +580,7 @@ def test_recommend_dose_without_polypharmacy_result_matches_old_behavior():
     assert rec["polypharmacy_bradycardia_risk_pct"] is None
 
 
-# --- Elektrolit / laboratuvar verisinin kalp üzerindeki etkisi (Faz 11) ---
+# --- Elektrolit / laboratuvar verisinin kalp üzerindeki etkisi ---
 
 def test_potassium_conduction_factor_normal_range_is_unity():
     from worldmodel.pd import potassium_av_conduction_factor
@@ -642,7 +642,7 @@ def test_new_electrolyte_patient_profiles_load_correctly():
     assert patients["hasta_a"].has_abnormal_electrolytes is False
 
 
-# --- Komorbidite / hastalık durumları (Faz 12) ---
+# --- Komorbidite / hastalık durumları ---
 
 def test_patient_comorbidity_defaults_to_none():
     assert _make_patient().comorbidity is None
@@ -668,7 +668,7 @@ def test_apply_comorbidity_to_circadapt_rejects_unknown_value():
         pass
 
 
-# --- Veri kaynağı izlenebilirliği / audit trail (Faz 14) ---
+# --- Veri kaynağı izlenebilirliği / audit trail ---
 
 def test_provenance_report_classifies_every_known_drug_without_gaps():
     from worldmodel.provenance import provenance_report
@@ -729,7 +729,7 @@ def test_provenance_report_handles_unknown_drug_gracefully():
     assert len(drug_rows) == 1
 
 
-# --- Klinik rapor çıktısı / PDF export (Faz 15) ---
+# --- Klinik rapor çıktısı / PDF export ---
 
 def _fake_heart_result_for_report():
     """export_report'un ihtiyaç duyduğu minimum alanları taşıyan sahte bir
@@ -792,7 +792,7 @@ def test_export_report_with_chart_figure_embedded():
     assert len(pdf_bytes) > len(pdf_bytes_no_chart)
 
 
-# --- EK GÖREV A: CircAdapt baseline hasta senkronizasyon düzeltmesi ---
+# --- CircAdapt baseline hasta senkronizasyon düzeltmesi ---
 
 def test_circadapt_baseline_reflects_patients_own_baseline_hr():
     """BULUNAN HATA regresyon testi: calibrate_circadapt_to_patient()
@@ -834,7 +834,7 @@ def test_calibrate_circadapt_stable_across_realistic_hr_range():
     assert not np.isnan(p).any()
 
 
-# --- EK GÖREV B: Ejeksiyon fraksiyonu (EF) / kardiyak output (CO) ---
+# --- Ejeksiyon fraksiyonu (EF) / kardiyak output (CO) ---
 
 def test_ejection_fraction_known_values():
     from worldmodel.clinical_metrics import ejection_fraction
@@ -869,7 +869,7 @@ def test_classify_cardiac_function_low_ef_is_red():
 def test_heart_failure_comorbidity_produces_genuinely_lower_ef_than_healthy():
     """Uçtan uca: kalp yetmezliği komorbiditesi olan bir hastanın CircAdapt
     baseline'ından hesaplanan EF, sağlıklı hastadan GERÇEKTEN düşük olmalı
-    (Görev B'nin ana iddiası -- düşürülmüş kontraktilite senaryosunda EF düşer)."""
+    (ana iddia -- düşürülmüş kontraktilite senaryosunda EF düşer)."""
     import integrate_drug_with_circadapt as idc
     from worldmodel.clinical_metrics import ejection_fraction
 

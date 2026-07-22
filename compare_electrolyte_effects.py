@@ -1,5 +1,5 @@
 """
-Elektrolit/Lab Verisinin Kalp Üzerindeki Etkisi (Faz 11)
+Elektrolit/Lab Verisinin Kalp Üzerindeki Etkisi
 ============================================================
 
 Potasyum ve kalsiyum, "sadece kilo" ötesinde gerçek hasta verisinin

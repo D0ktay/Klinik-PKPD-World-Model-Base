@@ -1,10 +1,10 @@
-# Faz 9 — Gerçek İlaç Veritabanı Entegrasyonu
+# Gerçek İlaç Veritabanı Entegrasyonu
 # ==============================================
 #
 # Bu dosya, drugs.yaml'dan FARKLI bir amaç taşıyor: her ilaç girdisine
 # `source_url` ve `retrieved_date` alanları ekleyerek VERİ İZLENEBİLİRLİĞİ
-# (provenance) sağlıyor -- Faz 14'ün "her sayının kaynağı belli olmalı"
-# felsefesinin ön çalışması.
+# (provenance) sağlıyor -- "her sayının kaynağı belli olmalı" felsefesinin
+# ön çalışması.
 #
 # Nasıl üretildi: her ilaç için önce `python drug_lookup.py` (veya
 # `drug_lookup.summarize_for_calibration()`) ile RxNorm'dan RxCUI ve
@@ -30,10 +30,10 @@ esmolol:
   calibration_notes: >
     FDA etiketi (clinical_pharmacology) doğrudan "elimination half-life
     after intravenous infusion is approximately 9 minutes" diyor --
-    Faz 1'de Wiest 1991'den türetilen 9 dk'lık eliminasyon yarı ömrünü
-    BAĞIMSIZ olarak doğruluyor. Dozaj bölümü: "Optional loading dose:
-    500 mcg per kg infused over one minute" -- Faz 1'deki 0.5 mg/kg
-    değerini de doğrudan doğruluyor.
+    Wiest 1991'den türetilen 9 dk'lık eliminasyon yarı ömrünü BAĞIMSIZ
+    olarak doğruluyor. Dozaj bölümü: "Optional loading dose: 500 mcg per
+    kg infused over one minute" -- drugs.yaml'daki 0.5 mg/kg değerini de
+    doğrudan doğruluyor.
   dose_mg: 38.0              # referans ~76kg hasta için (0.5 mg/kg * 76kg)
   dose_mg_per_kg: 0.5
   ka: 21.0
@@ -107,7 +107,7 @@ dobutamine:
   retrieved_date: "2026-07-22"
   calibration_notes: >
     FDA etiketi (dosage_and_administration): "Infusion of dobutamine
-    should be started at a low rate (0.5 to 1.0 mcg/kg/min)" -- Faz 2'de
+    should be started at a low rate (0.5 to 1.0 mcg/kg/min)" --
     Kates & Leier 1978'den türetilen ~5 mcg/kg/dk kararlı-durum
     kalibrasyonuyla aynı büyüklük mertebesinde (klinik doz aralığının
     içinde), bağımsız bir doğrulama. Detaylı PK türetimi için
@@ -132,8 +132,8 @@ digoxin:
     to consider factors that affect digoxin blood levels (e.g., body
     weight, age, RENAL FUNCTION, concomitant drugs) since toxic levels
     of digoxin are only slightly higher than therapeutic levels" --
-    Faz 8'in renal_clearance_fraction mekanizmasının TAM OLARAK neden
-    var olduğunu, FDA'nın kendi etiketinden bağımsız olarak doğruluyor.
+    renal_clearance_fraction mekanizmasının TAM OLARAK neden var
+    olduğunu, FDA'nın kendi etiketinden bağımsız olarak doğruluyor.
     Detaylı PK türetimi için configs/drugs.yaml > digoxin girdisine
     bakın (aynı değerler).
   dose_mg: 0.91

@@ -2,7 +2,7 @@
 Polifarmasi Karşılaştırması — Tehlikeli Bir İlaç Kombinasyonu
 =================================================================
 
-Faz 10: esmolol (beta-bloker) ve digoksin (pozitif inotrop, ama AYNI
+Esmolol (beta-bloker) ve digoksin (pozitif inotrop, ama AYNI
 ZAMANDA negatif kronotrop -- AV düğümünü yavaşlatır) İKİ FARKLI
 mekanizmadan gelse de, İKİSİ DE nabzı düşürür. Bu script, ikisinin
 tek başına ve BİRLİKTE verildiğinde nabız/bradikardi riskini hem

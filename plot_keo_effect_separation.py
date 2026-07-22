@@ -2,7 +2,7 @@
 HR vs SBP Etki Zamanlaması Ayrışması (Keo Modeli)
 ====================================================
 
-Faz 5: nabız (HR) ve tansiyon (SBP) etkisi artık aynı, gecikmesiz
+Nabız (HR) ve tansiyon (SBP) etkisi artık aynı, gecikmesiz
 plazma konsantrasyonundan değil, kendi keo (etki bölgesi denge hızı)
 değerleriyle filtrelenmiş AYRI eğrilerden hesaplanıyor. Bu script,
 esmolol için bu iki eğrinin (plazma konsantrasyonuna göre) farklı

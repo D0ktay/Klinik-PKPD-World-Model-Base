@@ -2,7 +2,7 @@
 Gerçek İlaç Veritabanlarına Bağlantı (RxNorm + openFDA)
 ==========================================================
 
-Faz 9: Şu ana kadar her ilacı elle YAML'a giriyorduk. Bu modül, halka
+Şu ana kadar her ilacı elle YAML'a giriyorduk. Bu modül, halka
 açık iki ücretsiz tıbbi veri API'sinden gerçek veri çekmeyi sağlıyor:
 
 1. RxNorm (ABD Ulusal Tıp Kütüphanesi, api anahtarı gerekmez) --
@@ -164,8 +164,8 @@ if __name__ == "__main__":
     # çökebiliyor. errors="replace" ile script'in bu yüzden çökmesini önlüyoruz.
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-    # Faz 9'da configs/drugs_verified.yaml'a eklenen 5 ilaç için hızlı
-    # bir keşif çıktısı -- kalibrasyon sırasında gerçekten böyle kullanıldı.
+    # configs/drugs_verified.yaml'daki 5 ilaç için hızlı bir keşif çıktısı
+    # -- kalibrasyon sırasında gerçekten böyle kullanıldı.
     for name, route in [
         ("esmolol", None),
         ("metoprolol", "INTRAVENOUS"),

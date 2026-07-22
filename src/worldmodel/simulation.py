@@ -304,13 +304,13 @@ def recommend_dose(patient: Patient, drug: Drug,
     Aynı ilacın farklı dozlarını tarayıp, bradikardi riskini güvenli sınırda
     (varsayılan %5) tutan EN YÜKSEK dozu önerir -- yani "güvenli sınır
     içinde en fazla tedavi edici etki" mantığı. Hiçbir doz güvenli değilse,
-    riski en düşük olan doz önerilir. (Bu kısım Faz 2'den beri değişmedi.)
+    riski en düşük olan doz önerilir.
 
-    Faz 6: circadapt_results verilirse (integrate_drug_with_circadapt.py'daki
+    circadapt_results verilirse (integrate_drug_with_circadapt.py'daki
     run_comparison()'ın döndürdüğü sözlük -- "v_base"/"v_drug" içeren),
     istatistiksel risk ayrıca CircAdapt'in ürettiği MEKANİK riskle
     (LVEDV'nin baseline'a göre max_lvedv_increase_pct'ten fazla artması --
-    aşırı önyük/preload riski, bkz. Faz 1-3'teki Frank-Starling bulguları)
+    aşırı önyük/preload riski, bkz. Frank-Starling mekanizması)
     birleştirilir. circadapt_results, çağıranın (örn. Streamlit) O ANDA
     seçili dozla zaten çalıştırmış olduğu bir CircAdapt sonucu olmalı --
     bu fonksiyon CircAdapt'i (yavaş olduğu için) kendi taramasında TEKRAR
@@ -319,7 +319,7 @@ def recommend_dose(patient: Patient, drug: Drug,
     conservative_dose_factor ile aşağı çekilir ve gerekçe insan-okunur bir
     metin olarak döndürülür.
 
-    Faz 10: polypharmacy_result verilirse (run_polypharmacy_simulation()'ın
+    polypharmacy_result verilirse (run_polypharmacy_simulation()'ın
     döndürdüğü bir SimulationResult -- bu ilacın hastanın ZATEN kullandığı
     başka ilaç(lar)la BİRLİKTE verildiği senaryo), o kombinasyonun
     bradikardi riski bu ilacın TEK BAŞINA riskinin polypharmacy_risk_
@@ -410,7 +410,7 @@ def recommend_dose(patient: Patient, drug: Drug,
                 f"riski anlamlı şekilde artmıyor (%{polypharmacy_bradycardia_risk_pct:.1f})."
             )
 
-    # Faz 11: hastanın kendi elektrolit durumu normal aralık dışındaysa
+    # Hastanın kendi elektrolit durumu normal aralık dışındaysa
     # (ilaçtan bağımsız, sadece hastanın laboratuvar değerlerine dayalı) --
     # bu ilaç sınıfına özel bir risk hesaplamıyoruz, sadece klinisyeni
     # bilgilendiren genel bir uyarı ekliyoruz.

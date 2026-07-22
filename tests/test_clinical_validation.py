@@ -1,5 +1,5 @@
 """
-Faz 13 — Doğrulama Katmanı: Sonuçları Gerçek Klinik Veriyle Kıyaslama
+Doğrulama Katmanı: Sonuçları Gerçek Klinik Veriyle Kıyaslama
 =========================================================================
 
 Şu ana kadar hep "girdi gerçek mi" (parametreler literatürden mi geldi)
@@ -127,7 +127,7 @@ def test_model_predicted_reduction_fraction_coincidentally_close_to_svt_trial():
     sapma göstermesini BEKLİYORDUK (farklı doz rejimi, farklı bazal fizyoloji).
     Test edildiğinde beklenmedik şekilde YAKIN çıktı: model pik etkide
     ~%27 nabız azalması öngörüyor, çalışma ~%24 azalma bildiriyor (Kaynak [A]:
-    139->106 bpm). Bu YANILTICI OLABİLİR -- `emax_hr=25` Faz 1'de bu çalışmadan
+    139->106 bpm). Bu YANILTICI OLABİLİR -- `emax_hr=25` bu çalışmadan
     DEĞİL, temsili/kalibrasyon gerektiren bir tahminden geldi (bkz.
     configs/drugs.yaml yorumu). Yakınlık muhtemelen TESADÜF; iki senaryo
     (tek bolus vs saatlerce süren titre edilmiş infüzyon, normal bazal nabız
@@ -159,8 +159,8 @@ def test_bolus_model_concentration_wanes_by_60_minutes_unlike_sustained_infusion
     modelimiz ise TEK BİR bolus sonrası doğal PK bozunumunu simüle ediyor
     -- idame infüzyonu YOK (bu proje idame infüzyon PK'sını modellemiyor).
 
-    Esmololün eliminasyon yarı ömrü ~9 dakika (Wiest 1991, Faz 1/9'da
-    doğrulandı) -- 60 dakika, ~6.5 yarı ömre denk gelir, PLAZMA
+    Esmololün eliminasyon yarı ömrü ~9 dakika (Wiest 1991, ayrıca openFDA
+    ile bağımsız doğrulandı) -- 60 dakika, ~6.5 yarı ömre denk gelir, PLAZMA
     KONSANTRASYONUNUN neredeyse tamamı sönmüş olmalı (test edildi: pik
     değerin ~%2'sine iniyor). Bu, published çalışmadaki "infüzyon
     süresince sürdürülen SABİT konsantrasyon" ile YAPISAL OLARAK

@@ -7,8 +7,8 @@ Bu dosya, bu proje üzerinde çalışan Claude Code için proje-özel kurallar i
 Mini Klinik Dünya Modeli — Vivax'ın Acudx mimarisinden ilham alan bir
 kavram-kanıtı (proof-of-concept). PK/PD (farmakokinetik/farmakodinamik)
 Monte Carlo simülasyonunu, CircAdapt (gerçek kalp mekaniği motoru) ile
-birleştiriyor. Detaylı mimari ve terim açıklamaları için `README.md`
-(özellikle en üstteki "Sözlük" bölümü) ve `CALIBRATION_REPORT.md`'ye bakın.
+birleştiriyor. Detaylı mimari ve terim açıklamaları için `README.md` ve
+`CALIBRATION_REPORT.md`'ye bakın.
 
 ## Kurallar
 
@@ -24,9 +24,10 @@ sade, günlük dilde bir açıklama ekle.** Örnek format:
 - "EF / ejeksiyon fraksiyonu (kalbin her atışta kanın yüzde kaçını pompaladığı)"
 - "bradikardi (anormal derecede yavaş kalp atışı)"
 
-Bu kural her zaman geçerli -- yeni bir faz/özellik eklenirken de,
-mevcut kodu düzenlerken de uygulanmalı. `README.md`'nin en üstündeki
-"Sözlük" bölümüne de yeni terimi ekle (alfabetik sırada).
+Bu kural her zaman geçerli -- yeni bir özellik eklenirken de, mevcut
+kodu düzenlerken de uygulanmalı. Yeni bir kavram kategorisi (yeni bir
+mekanizma, yeni bir formül) eklendiyse, `README.md`'nin ilgili
+bölümüne de kısaca ekle.
 
 Streamlit widget'larında (slider, metric, selectbox), açıklamayı
 `help=` parametresiyle ver -- kullanıcı "?" ikonunun üzerine gelince
@@ -42,7 +43,7 @@ projede birden fazla kez (`cLv` isimlendirmesi, `Sf_act`/`ArtVen.p0`
 mutasyon bug'ı, `PFC`'nin `ArtVen` direncini nötralize etmesi,
 `Timings.tau_av`'ın bir "law"dan yeniden hesaplanması) gerçek, sessizce
 yanlış sonuç üreten hatalara yol açtı -- detaylar için README.md >
-"Bilinen CircAdapt API Davranışları" bölümüne bakın.
+"Bulunan mühendislik hataları" bölümüne bakın.
 
 ### Her değişiklikten sonra testleri çalıştır
 

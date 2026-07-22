@@ -1,5 +1,5 @@
 """
-Veri Kaynağı İzlenebilirliği (Audit Trail) — Faz 14
+Veri Kaynağı İzlenebilirliği (Audit Trail)
 
 "Verinin kaynağı belli olmalı, kara kutu olmamalı." Bu modül, bir
 simülasyonda kullanılan HER parametrenin nereden geldiğini üç kategoriye
@@ -39,8 +39,8 @@ DRUG_PARAMETER_PROVENANCE: dict[str, dict[str, tuple[str, str]]] = {
         "emax_hr": (_ASSUMPTION, "temsili -- kalibrasyon gerektirir"),
         "emax_sbp": (_ASSUMPTION, "temsili -- kalibrasyon gerektirir"),
         "ec50": (_ASSUMPTION, "temsili -- kalibrasyon gerektirir"),
-        "keo_hr": (_ASSUMPTION, "temsili (Faz 5) -- literatürden değil"),
-        "keo_sbp": (_ASSUMPTION, "temsili (Faz 5) -- literatürden değil"),
+        "keo_hr": (_ASSUMPTION, "temsili -- literatürden değil"),
+        "keo_sbp": (_ASSUMPTION, "temsili -- literatürden değil"),
         "renal_clearance_fraction": (_LITERATURE, "esmolol eritrosit esterazlarıyla metabolize olur, böbrekten bağımsız"),
         "hepatic_clearance_fraction": (_LITERATURE, "aynı -- karaciğerden bağımsız"),
     },

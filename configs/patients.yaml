@@ -23,7 +23,7 @@ hasta_b:
   baseline_dbp: 88
   baseline_spo2: 95
 
-# Faz 11: elektrolit/lab verisinin kalp üzerindeki etkisini göstermek için
+# Elektrolit/lab verisinin kalp üzerindeki etkisini göstermek için
 # -- aksi belirtilmedikçe tüm alanlar hasta_a ile aynı, sadece potasyum/
 # kalsiyum değişti. compare_electrolyte_effects.py ile karşılaştırın.
 hasta_c_hiperkalemi:
@@ -53,7 +53,7 @@ hasta_d_hipokalsemi:
   potassium_mEqL: 4.25
   calcium_mgdL: 6.8            # normal 8.5-10.5 -- belirgin hipokalsemi (azalmış kontraktilite beklenir)
 
-# Faz 12: kronik komorbidite profilleri -- aksi belirtilmedikçe tüm alanlar
+# Kronik komorbidite profilleri -- aksi belirtilmedikçe tüm alanlar
 # hasta_a ile aynı, sadece comorbidity eklendi. compare_comorbidity_effects.py
 # ile aynı ilaç dozunun sağlıklı hastaya karşı bu hastalarda NASIL FARKLI
 # sonuç verdiğini karşılaştırın.

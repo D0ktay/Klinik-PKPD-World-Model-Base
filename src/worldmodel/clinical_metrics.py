@@ -1,5 +1,5 @@
 """
-Klinik Olarak Anlamlı Metrikler (EK GÖREV B)
+Klinik Olarak Anlamlı Metrikler
 
 Şu ana kadar CircAdapt sonuçlarını ham basınç/hacim sayılarıyla
 gösteriyorduk. Bu dosya, bunları kardiyolojinin gerçekte kullandığı

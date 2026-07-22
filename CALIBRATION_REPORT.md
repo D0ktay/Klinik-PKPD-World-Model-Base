@@ -4,10 +4,10 @@ Bu rapor, projedeki HER parametrenin nereden geldiğini (gerçek literatür /
 temsili varsayım / kullanıcı girdisi) ve modelin çıktılarının yayınlanmış
 klinik veriyle nerede uyuştuğunu, nerede uyuşmadığını **dürüstçe**
 belgeliyor. Amaç: "kör kör her şey doğru" iddiası yerine, "şuraya kadar
-güvenebilirsin, burada dikkatli ol" diyen bir mühendislik duruşu (Faz 13).
+güvenebilirsin, burada dikkatli ol" diyen bir mühendislik duruşu.
 
-Canlı, otomatik bir versiyonu için: `provenance_report()` (Faz 14) ve
-Streamlit arayüzündeki "Bu sonuç neye dayanıyor?" bölümü.
+Canlı, otomatik bir versiyonu için: `provenance_report()` ve Streamlit
+arayüzündeki "Bu sonuç neye dayanıyor?" bölümü.
 
 ---
 
@@ -15,8 +15,8 @@ Streamlit arayüzündeki "Bu sonuç neye dayanıyor?" bölümü.
 
 | İlaç | PK parametreleri | PD parametreleri (emax/ec50) | Doğrulama |
 |---|---|---|---|
-| **Esmolol** (`beta_bloker`) | ✅ Gerçek (Wiest 1991, FDA label; Faz 9'da openFDA ile bağımsız doğrulandı) | ⚠️ Temsili | ✅ Faz 13: onset/duration testleri geçti |
-| **Nikardipin** | ✅ Gerçek (Clinical Pharmacokinetics 2006, DailyMed) | ⚠️ Temsili | ❌ Doğrulanmadı (Faz 13 kapsamı sadece esmolol) |
+| **Esmolol** (`beta_bloker`) | ✅ Gerçek (Wiest 1991, FDA label; openFDA ile bağımsız doğrulandı) | ⚠️ Temsili | ✅ Onset/duration testleri geçti |
+| **Nikardipin** | ✅ Gerçek (Clinical Pharmacokinetics 2006, DailyMed) | ⚠️ Temsili | ❌ Doğrulanmadı (kapsam sadece esmolol) |
 | **Dobutamin** | ✅ Gerçek (Kates & Leier 1978), ama **dose_mg_per_kg bolus-eşdeğeri bir yaklaşıklık** (gerçek klinik kullanım sadece infüzyon) | ⚠️ Temsili | ❌ Doğrulanmadı |
 | **Digoksin** | ✅ Gerçek (standart ders kitabı: t½, Vd, renal atılım fraksiyonu) | ⚠️ Temsili | ❌ Doğrulanmadı |
 | **Metoprolol** (`drugs_verified.yaml`) | ✅ Gerçek (FDA etiketi: doz, onset zamanlaması); t½/Vd ders kitabı | ⚠️ Temsili | ❌ Doğrulanmadı |
@@ -38,17 +38,17 @@ boşluğu.
 
 | Mekanizma | Durum |
 |---|---|
-| Böbrek/karaciğer fonksiyonunun ke üzerindeki etkisi (Faz 8) | ✅ Yön/varlık gerçek (esmolol=etkilenmez, digoksin=%65 renal), kesin oran (`renal_clearance_fraction`) ders kitabı |
-| Keo (etki bölgesi gecikmesi, Faz 5) | ⚠️ Tamamen temsili -- hiçbir ilaçta yayınlanmış bir Keo çalışmasından gelmedi |
-| Potasyum -> AV iletim gecikmesi (Faz 11) | ✅ Yön gerçek (hiperkalemi AV iletimini yavaşlatır, iyi bilinen fizyoloji), eğim (0.3) temsili |
-| Kalsiyum -> kontraktilite (Faz 11) | ✅ Yön gerçek (Ca-kontraktilite ilişkisi, iyi bilinen fizyoloji), eğim (0.08) temsili |
-| Kalp yetmezliği / hipertansiyon profilleri (Faz 12) | ✅ Mekanizma gerçek (KY=azalmış kontraktilite, HT=artmış direnç+basınç setpoint'i), büyüklük (%40, %30) temsili |
-| Polifarmasi interaction_matrix (Faz 10) | ⚠️ Varsayılan olarak KULLANILMIYOR (saf toplamsal); örnek çarpan (0.5) tamamen temsili |
-| İki-kompartmanlı esmolol k10/k12/k21 (Faz 4) | ✅ alpha/beta gerçek, ama santral hacim (Vc=0.5 L/kg) VARSAYIM (esmolole özgü ayrı bir Vc yayını bulunamadı) |
+| Böbrek/karaciğer fonksiyonunun ke üzerindeki etkisi | ✅ Yön/varlık gerçek (esmolol=etkilenmez, digoksin=%65 renal), kesin oran (`renal_clearance_fraction`) ders kitabı |
+| Keo (etki bölgesi gecikmesi) | ⚠️ Tamamen temsili -- hiçbir ilaçta yayınlanmış bir Keo çalışmasından gelmedi |
+| Potasyum -> AV iletim gecikmesi | ✅ Yön gerçek (hiperkalemi AV iletimini yavaşlatır, iyi bilinen fizyoloji), eğim (0.3) temsili |
+| Kalsiyum -> kontraktilite | ✅ Yön gerçek (Ca-kontraktilite ilişkisi, iyi bilinen fizyoloji), eğim (0.08) temsili |
+| Kalp yetmezliği / hipertansiyon profilleri | ✅ Mekanizma gerçek (KY=azalmış kontraktilite, HT=artmış direnç+basınç setpoint'i), büyüklük (%40, %30) temsili |
+| Polifarmasi interaction_matrix | ⚠️ Varsayılan olarak KULLANILMIYOR (saf toplamsal); örnek çarpan (0.5) tamamen temsili |
+| İki-kompartmanlı esmolol k10/k12/k21 | ✅ alpha/beta gerçek, ama santral hacim (Vc=0.5 L/kg) VARSAYIM (esmolole özgü ayrı bir Vc yayını bulunamadı) |
 
 ---
 
-## 3. Faz 13 Doğrulama Sonuçları — `tests/test_clinical_validation.py`
+## 3. Klinik Doğrulama Sonuçları — `tests/test_clinical_validation.py`
 
 Esmolol için, gerçek yayınlanmış klinik çalışmalarla 5 karşılaştırma
 yapıldı:
@@ -73,8 +73,8 @@ ediyor -- yapısal olarak çok farklı iki senaryo.
 Test çalıştırıldığında, pik etkideki nabız azalma ORANI (%27 model vs
 %24 çalışma) beklenmedik şekilde ±%20 tolerans içinde çıktı. **Bu bir
 doğrulama olarak GÜVENİLİR SAYILMAMALI** -- `emax_hr=25` parametresi bu
-çalışmadan türetilmedi (Faz 1'de temsili olarak seçildi), yakınlık
-büyük olasılıkla TESADÜFİ. Gerçek, sağlam kanıt Test #5'te: modelin
+çalışmadan türetilmedi (temsili olarak seçildi), yakınlık büyük
+olasılıkla TESADÜFİ. Gerçek, sağlam kanıt Test #5'te: modelin
 konsantrasyonu 60 dakikada pik değerin ~%2'sine iniyor (tek-bolus PK
 kinetiği), oysa published çalışmadaki etki İNFÜZYON SÜRESİNCE
 SÜRDÜRÜLDÜ -- bu, modelin **idame infüzyon tedavisini modelleyemediği**

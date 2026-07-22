@@ -8,10 +8,10 @@ Slider'larla kilo, doz, deneme sayısını değiştir, grafiğin anlık
 değiştiğini göster -- "hastanın kilosu gerçekten sonucu değiştiriyor"
 mesajını canlı kanıtlamanın en etkili yolu budur.
 
-Faz 15: sayfa artık tek uzun akış değil, 5 sekmeye ayrıldı (Hasta Girişi
-/ İlaç Seçimi / Simülasyon / CircAdapt Sonuçları / Rapor İndir) -- her
-sekmenin widget'ları normal Python değişkenleri döndürür, bu yüzden
-sekmeler arasında veri akışı (patient/drug/sim) hiç değişmedi.
+Sayfa tek uzun akış değil, 6 sekmeye ayrıldı (Hasta Girişi / İlaç Seçimi /
+Simülasyon / CircAdapt Sonuçları / Dünya Modelini Gözlemle / Rapor İndir)
+-- her sekmenin widget'ları normal Python değişkenleri döndürür, bu yüzden
+sekmeler arasında veri akışı (patient/drug/sim) değişmez.
 """
 
 import sys
@@ -349,7 +349,7 @@ with tab_heart:
             help="Nabız: kalbin dakikada kaç kez attığı (bpm = beats per minute).",
         )
 
-        # --- Klinik olarak anlamlı metrikler: EF / CO (EK GÖREV B) ---
+        # --- Klinik olarak anlamlı metrikler: EF / CO ---
         st.subheader("Kalp Fonksiyonu Değerlendirmesi")
         st.caption(
             "Ham basınç/hacim sayıları yerine, kardiyolojinin gerçekte kullandığı "
@@ -400,7 +400,7 @@ with tab_heart:
             f"({cls_drug['ef_label']}, {cls_drug['co_label']})"
         )
 
-        # --- Veri kaynağı izlenebilirliği (Faz 14) ---
+        # --- Veri kaynağı izlenebilirliği ---
         st.divider()
         with st.expander("🔍 Bu sonuç neye dayanıyor?"):
             st.caption(
@@ -423,8 +423,8 @@ with tab_heart:
             ])
 
 # --- Sekme 5: Dünya Modelini Gözlemle ---
-# EK GÖREV (EK_GOREV_DUNYA_MODELI_GOZLEMLE.md): "kara kutuyu" açıp her
-# adımı okunabilir şekilde göstermek için. Bilinçli olarak CircAdapt'ten
+# Simülasyonun "kara kutusunu" açıp her adımı okunabilir şekilde göstermek
+# için. Bilinçli olarak CircAdapt'ten
 # BAĞIMSIZ çalışır (varsayılan motor: run_reference_trace, gürültüsüz/tek
 # bir PK/PD izi -- hızlı) -- CircAdapt (yavaş) sadece "Gerçek Kalp
 # Modeliyle Göster" butonuna basılırsa, ve sadece İKİ referans an için

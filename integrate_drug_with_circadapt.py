@@ -68,9 +68,8 @@ SYSTEMIC_ARTVEN_INDEX = 0
 
 def calibrate_circadapt_to_patient(model, patient):
     """
-    DÜZELTME (EK_GOREV_SOZLUK_VE_DUZELTME.md, Görev A): CircAdapt'e
-    hastanın KENDİ bazal nabzını (patient.baseline_hr, configs/
-    patients.yaml'dan) aktarır.
+    DÜZELTME: CircAdapt'e hastanın KENDİ bazal nabzını (patient.baseline_hr,
+    configs/patients.yaml'dan) aktarır.
 
     BULUNAN HATA: bu fonksiyon eklenmeden önce, CircAdapt'in bazal kalp
     hızı HER ZAMAN kendi jenerik varsayılanıydı (General.t_cycle=0.85s,
@@ -142,14 +141,14 @@ def apply_drug_effect_to_circadapt(model, drug_class: str, hr_fraction: float,
 
 def apply_patient_electrolytes_to_circadapt(model, patient):
     """
-    Faz 11: hastanın KENDİ elektrolit durumunu (ilaçtan bağımsız) CircAdapt
+    Hastanın KENDİ elektrolit durumunu (ilaçtan bağımsız) CircAdapt
     modeline uygular:
       - Potasyum -> Timings.c_tau_av1 (AV iletim gecikmesi katsayısı).
         `Timings.tau_av`'ı DOĞRUDAN değiştirmek işe yaramıyor -- tau_av
         her adımda `c_tau_av0 + c_tau_av1 * t_cycle` formülünden (bir
         "law") yeniden hesaplanıyor, bu yüzden manuel atama sessizce
-        geri alınıyor (deneyerek bulundu, tıpkı Faz 3'teki Sf_act/ArtVen
-        bug'ları gibi). Doğru kullanım katsayıyı (c_tau_av1) değiştirmek.
+        geri alınıyor (deneyerek bulundu, tıpkı Sf_act/ArtVen bug'ları
+        gibi). Doğru kullanım katsayıyı (c_tau_av1) değiştirmek.
       - Kalsiyum -> Patch.Sf_act (ventrikül kontraktilitesi).
 
     Normal orta noktadaki (K=4.25, Ca=9.5) bir hastada çarpanlar tam 1.0
@@ -168,7 +167,7 @@ def apply_patient_electrolytes_to_circadapt(model, patient):
     return model
 
 
-# Faz 12: hastalık profili çarpanları -- TEMSİLİDİR, belirli bir hasta
+# Hastalık profili çarpanları -- TEMSİLİDİR, belirli bir hasta
 # kohortundan/çalışmadan kalibre edilmedi. Yön ve mekanizma gerçek
 # fizyolojiye dayanıyor (sistolik KY = azalmış kontraktilite; kronik HT =
 # artmış sistemik direnç + yükselmiş basınç setpoint'i).
@@ -178,7 +177,7 @@ HYPERTENSION_RESISTANCE_FACTOR = 1.3          # sistemik direnç %30 artar
 
 def apply_comorbidity_to_circadapt(model, comorbidity: str | None):
     """
-    Faz 12: hastanın KRONİK komorbiditesini (ilaçtan/elektrolitten bağımsız,
+    Hastanın KRONİK komorbiditesini (ilaçtan/elektrolitten bağımsız,
     hastanın temel kalp/damar durumu) CircAdapt modeline uygular.
 
     - "heart_failure" (sistolik kalp yetmezliği): ventrikül duvarlarının
@@ -188,7 +187,7 @@ def apply_comorbidity_to_circadapt(model, comorbidity: str | None):
     - "hypertension" (kronik hipertansiyon): HEM sistemik damar direncini
       (ArtVen.p0[0]) HEM PressureFlowControl'ün kendi hedef basıncını
       (PFC.p0) BİRLİKTE artırır. SADECE ArtVen.p0 artırmak yetmez --
-      PFC normalde kendi SABİT hedefine geri "fit" eder (Faz 3'te
+      PFC normalde kendi SABİT hedefine geri "fit" eder (deneyerek
       keşfedildi, doğrulandı: ArtVen.p0 tek başına artırılırsa PFC bunu
       nötralize ediyor). PFC.p0'ı da artırmak, "bu hastanın vücudunun
       YENİ (yüksek) basıncı normal kabul ettiği" KRONİK bir adaptasyonu
@@ -243,7 +242,7 @@ def compute_drug_effect(patient, drug, t_peak_hours: float = None):
 
 def run_baseline(patient=None):
     """
-    patient verilirse (Faz 11-12), "baseline" artık jenerik bir sağlıklı
+    patient verilirse, "baseline" artık jenerik bir sağlıklı
     kalp değil, BU HASTANIN KENDİ elektrolit durumunu VE kronik
     komorbiditesini yansıtan bir kalp -- ör. hiperkalemik bir hastanın
     "ilaçsız" baseline'ı bile yavaşlamış AV iletim gösterir; kalp
@@ -268,7 +267,7 @@ def run_with_drug(patient, drug, drug_effect):
 
     hr_fraction = drug_effect["hr_drug"] / patient.baseline_hr
     sbp_fraction = drug_effect["sbp_drug"] / patient.baseline_sbp
-    # Eski (Faz 1-2) konfigürasyonlarda drug_class olmayabilir --
+    # Eski konfigürasyonlarda drug_class olmayabilir --
     # geriye dönük uyumluluk için varsayılan beta_blocker davranışına düş.
     drug_class = drug.drug_class or "beta_blocker"
 
@@ -309,8 +308,8 @@ def build_comparison_figure(t_base, p_base, v_base, t_drug, p_drug, v_drug,
 
 def run_with_multiple_drugs(patient, drugs, drug_effects):
     """
-    Faz 10: birden fazla ilacı AYNI CircAdapt model örneğine, SIRAYLA
-    uygular -- her ilaç kendi drug_class'ının mekanizmasını hedefler.
+    Birden fazla ilacı AYNI CircAdapt model örneğine, SIRAYLA uygular --
+    her ilaç kendi drug_class'ının mekanizmasını hedefler.
 
     Bu, apply_drug_effect_to_circadapt'i birden fazla kez çağırmaktan
     ibaret ve KASITLI olarak öyle: General.t_cycle her çağrıda kendi

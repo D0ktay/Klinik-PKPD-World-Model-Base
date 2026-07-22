@@ -1,5 +1,5 @@
 """
-Klinik Rapor Çıktısı (Faz 15)
+Klinik Rapor Çıktısı
 
 Simülasyon sonucunu, gerçek bir hastane raporu formatını taklit eden
 (hasta bilgisi başlığı, grafik, özet, kaynakça) ama sayfanın en üstünde

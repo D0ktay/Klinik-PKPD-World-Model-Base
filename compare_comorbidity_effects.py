@@ -2,7 +2,7 @@
 Komorbidite Karşılaştırması — Aynı Doz, Farklı Kalp, Farklı Sonuç
 =====================================================================
 
-Faz 12: Şu ana kadar herkes "sağlıklı bazal" bir kalple başlıyordu.
+Şu ana kadar herkes "sağlıklı bazal" bir kalple başlıyordu.
 Gerçek hastanelerde kalp yetmezliği, hipertansiyon gibi önceden var olan
 durumlar ilaç tepkisini KÖKTEN değiştirir -- gerçek klinikte de tam bu
 yüzden dozlar hastaya göre uyarlanır.
