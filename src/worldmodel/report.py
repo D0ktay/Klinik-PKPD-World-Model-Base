@@ -13,8 +13,10 @@ için bilinçli bir tasarım kararı.
 """
 
 import io
+import os
 from datetime import datetime
 
+import matplotlib
 from fpdf import FPDF
 
 from .provenance import provenance_report
@@ -25,8 +27,16 @@ DISCLAIMER = (
     "KLİNİK KARAR ALMA İÇİN KULLANILAMAZ."
 )
 
-_ARIAL_REGULAR = r"C:\Windows\Fonts\arial.ttf"
-_ARIAL_BOLD = r"C:\Windows\Fonts\arialbd.ttf"
+# Türkçe karakterler (ı, ğ, ş, ç, ö, ü, İ) için Unicode destekli bir TTF
+# gerekiyor -- bir işletim sistemi fontuna (ör. C:\Windows\Fonts\arial.ttf)
+# GÜVENMİYORUZ çünkü bu sadece Windows'ta çalışır (Streamlit Cloud gibi
+# Linux ortamlarında FileNotFoundError verir). Bunun yerine, projenin zaten
+# bir bağımlılığı olan matplotlib'in HER platformda pip ile birlikte gelen
+# kendi DejaVu Sans fontunu kullanıyoruz -- işletim sisteminden bağımsız,
+# her zaman aynı yerde.
+_MPL_FONT_DIR = os.path.join(matplotlib.get_data_path(), "fonts", "ttf")
+_UNICODE_FONT_REGULAR = os.path.join(_MPL_FONT_DIR, "DejaVuSans.ttf")
+_UNICODE_FONT_BOLD = os.path.join(_MPL_FONT_DIR, "DejaVuSans-Bold.ttf")
 
 
 class _ClinicalReportPDF(FPDF):
@@ -37,7 +47,10 @@ class _ClinicalReportPDF(FPDF):
     def header(self):
         self.set_fill_color(200, 0, 0)
         self.set_text_color(255, 255, 255)
-        self.set_font("Arial", "B", 10)
+        # 9pt: DejaVu Sans Bold'ta DISCLAIMER metni tam olarak (~180mm)
+        # sayfanın kullanılabilir genişliğine (~190mm) sığıyor -- 10pt
+        # (~200mm) sayfa kenarlarından taşıp kırpılıyordu.
+        self.set_font("Arial", "B", 9)
         self.cell(0, 9, DISCLAIMER, border=0, align="C", fill=True, new_x="LMARGIN", new_y="NEXT")
         self.set_text_color(0, 0, 0)
         self.ln(3)
@@ -56,10 +69,12 @@ class _ClinicalReportPDF(FPDF):
 def _add_unicode_fonts(pdf: _ClinicalReportPDF):
     """Türkçe karakterler (ı, ğ, ş, ç, ö, ü) için Unicode destekli bir TTF
     font yükler -- FPDF'in varsayılan çekirdek fontları (Helvetica/Arial
-    core) Türkçe karakterleri desteklemiyor, bu yüzden gerçek bir Arial
-    TTF'i (Windows sistem fontu) Unicode modunda ekliyoruz."""
-    pdf.add_font("Arial", "", _ARIAL_REGULAR)
-    pdf.add_font("Arial", "B", _ARIAL_BOLD)
+    core) Türkçe karakterleri desteklemiyor. Font ailesini yine de "Arial"
+    adıyla kaydediyoruz (gerçek dosya DejaVu Sans olsa da) -- bu dosyanın
+    geri kalanındaki tüm set_font("Arial", ...) çağrıları değişmeden
+    çalışmaya devam etsin diye."""
+    pdf.add_font("Arial", "", _UNICODE_FONT_REGULAR)
+    pdf.add_font("Arial", "B", _UNICODE_FONT_BOLD)
 
 
 def _matplotlib_fig_to_png_bytes(fig) -> bytes:
@@ -150,7 +165,7 @@ def export_report(patient, drug, dose_rec: dict, mc_stats: dict,
 
     summary_rows = [
         ("Önerilen doz", f"{dose_rec['dose_mg']:.1f} mg"),
-        ("Bradikardi riski (anormal derecede yavaş nabız riski)", f"%{mc_stats['pct_bradycardia_risk']:.1f}"),
+        ("Bradikardi riski", f"%{mc_stats['pct_bradycardia_risk']:.1f}"),
         ("Ortalama en düşük nabız", f"{mc_stats['mean_min_hr']:.1f} bpm"),
         ("Mekanik risk (CircAdapt)", "Var" if dose_rec.get("mechanical_risk") else "Yok"),
         ("CircAdapt nabzı (ilaçlı)", f"{heart_result['hr_drug_model']:.0f} bpm"),
@@ -161,9 +176,22 @@ def export_report(patient, drug, dose_rec: dict, mc_stats: dict,
     ]
     for label, value in summary_rows:
         pdf.set_font("Arial", "B", 10)
-        pdf.cell(65, 6, label, new_x="RIGHT")
+        # 75mm: tablodaki en uzun etiket ("LVEDV / diyastol sonu hacim
+        # (ilaçlı)") DejaVu Sans Bold 10pt'te ~70mm genişliğinde ölçüldü --
+        # dar bir sütun genişliği, etiket metninin değer sütununun üzerine
+        # taşmasına (görsel çakışmaya) yol açıyordu.
+        pdf.cell(75, 6, label, new_x="RIGHT")
         pdf.set_font("Arial", "", 10)
         pdf.cell(0, 6, str(value), new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(1)
+    # "I" (italik) stili add_font ile kaydedilmedi -- kullanılırsa FPDF
+    # sessizce Unicode desteklemeyen bir çekirdek fonta düşer ve Türkçe
+    # karakterlerde çöker. Bu yüzden kayıtlı olan "" (normal) stili kullanılıyor.
+    pdf.set_font("Arial", "", 8)
+    pdf.set_text_color(110, 110, 110)
+    pdf.cell(0, 4, "Bradikardi: anormal derecede yavaş kalp atışı (bu projede <50 bpm eşiği kullanılıyor).",
+             new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(0, 0, 0)
     pdf.ln(2)
     pdf.set_font("Arial", "", 9)
     pdf.multi_cell(0, 5, dose_rec.get("reasoning", ""))
