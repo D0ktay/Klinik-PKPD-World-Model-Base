@@ -4,3 +4,7 @@ pyyaml>=6.0
 pytest>=7.4
 streamlit>=1.32
 fpdf2>=2.8
+pandas>=2.0
+requests>=2.30
+https://framework.circadapt.org/files/circadapt-2602-py3-none-linux_x86_64.whl ; sys_platform == "linux"
+https://framework.circadapt.org/files/circadapt-2602-py3-none-win_amd64.whl ; sys_platform == "win32"
