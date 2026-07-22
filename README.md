@@ -10,6 +10,10 @@ uyguladığında ortaya çıkan **yeni durumu** hesaplayan bir sistem. If-else
 zincirleriyle değil, gerçek farmakoloji denklemleri ve gerçek bir kalp
 mekaniği motoruyla.
 
+## Canlı demo
+
+Uygulamayı doğrudan tarayıcıdan açmak için: https://klinik-pkpd-world-model-base-ahrm47cwvjar9cgogclrz9.streamlit.app/
+
 ## İçindekiler
 
 1. [Genel bakış](#1-genel-bakış)
