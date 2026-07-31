@@ -1,0 +1,128 @@
+{
+  "n1_hasta_a_circadapt": {
+    "av_block_triggered": false,
+    "hr_base": 78.0,
+    "hr_drug_model": 73.46780388853128,
+    "tau_av_base_ms": 135.76923076923077,
+    "tau_av_drug_ms": 153.03700110627355
+  },
+  "n1_hasta_a_recommend_dose": {
+    "dose_mg": 20.0,
+    "electrolyte_warning": false,
+    "is_safe": true,
+    "mechanical_risk": false,
+    "polypharmacy_risk": false,
+    "reasoning": "İstatistiksel PK/PD modeli 20.0 mg'ı güvenli buluyor (bradikardi riski %0.0, eşik %5).",
+    "statistical_dose_mg": 20.0,
+    "stats": {
+      "mean_min_hr": 74.9473519439507,
+      "p5_min_hr": 73.6286546885328,
+      "p95_min_hr": 75.82781000617673,
+      "pct_bradycardia_risk": 0.0
+    }
+  },
+  "n1_hasta_k_circadapt": {
+    "av_block_triggered": false,
+    "hr_base": 78.0,
+    "hr_drug_model": 73.46780388853128,
+    "tau_av_base_ms": 196.86538461538458,
+    "tau_av_drug_ms": 221.90365160409664
+  },
+  "n1_hasta_k_recommend_dose": {
+    "dose_mg": 20.0,
+    "electrolyte_warning": true,
+    "is_safe": true,
+    "mechanical_risk": false,
+    "polypharmacy_risk": false,
+    "reasoning": "İstatistiksel PK/PD modeli 20.0 mg'ı güvenli buluyor (bradikardi riski %0.0, eşik %5). LAB UYARISI: Hastanın elektrolit değerleri normal aralık dışında (potasyum 6.5 mEq/L (normal 3.5-5.0)) -- bu, kalbin iletim hızını ve/veya kontraktilitesini bağımsız olarak etkileyebilir (bkz. CircAdapt sonuçları), bu ilacın etkisiyle ETKİLEŞEBİLİR. Yakın EKG/lab izlemi düşünün.",
+    "statistical_dose_mg": 20.0,
+    "stats": {
+      "mean_min_hr": 74.34200528811954,
+      "p5_min_hr": 72.90095744498979,
+      "p95_min_hr": 75.51240174890467,
+      "pct_bradycardia_risk": 0.0
+    }
+  },
+  "n2_hasta_a_circadapt": {
+    "av_block_triggered": false,
+    "hr_base": 78.0,
+    "hr_drug_model": 64.15218835051914,
+    "tau_av_base_ms": 135.76923076923077,
+    "tau_av_drug_ms": 200.70935333451678
+  },
+  "n2_hasta_a_dose_scale": {
+    "adjusted_doses": {
+      "Digoksin (literatür kalibrasyonlu -- böbrek fonksiyonuna duyarlı)": 2.736,
+      "Esmolol (literatür kalibrasyonlu)": 114.0
+    },
+    "is_safe": true,
+    "reasoning": "İstatistiksel Loewe additivity modeli, mevcut doz ORANINI koruyarak 3.00 katına kadar çıkarmanın güvenli olduğunu buluyor (bradikardi riski %0.0, eşik %5).",
+    "scale": 3.0,
+    "stats": {
+      "mean_min_hr": 62.93948077309457,
+      "p5_min_hr": 61.639837366535936,
+      "p95_min_hr": 64.36905620362985,
+      "pct_bradycardia_risk": 0.0
+    }
+  },
+  "n2_hasta_a_recommend_dose": {
+    "dose_mg": 20.0,
+    "electrolyte_warning": false,
+    "is_safe": true,
+    "mechanical_risk": false,
+    "polypharmacy_risk": false,
+    "reasoning": "İstatistiksel PK/PD modeli 20.0 mg'ı güvenli buluyor (bradikardi riski %0.0, eşik %5). Digoksin (literatür kalibrasyonlu -- böbrek fonksiyonuna duyarlı) ile birlikte verildiğinde bradikardi riski anlamlı şekilde artmıyor (%0.0).",
+    "statistical_dose_mg": 20.0,
+    "stats": {
+      "mean_min_hr": 74.9473519439507,
+      "p5_min_hr": 73.6286546885328,
+      "p95_min_hr": 75.82781000617673,
+      "pct_bradycardia_risk": 0.0
+    }
+  },
+  "n2_hasta_k_circadapt": {
+    "av_block_triggered": false,
+    "hr_base": 78.0,
+    "hr_drug_model": 64.15218835051914,
+    "tau_av_base_ms": 196.86538461538458,
+    "tau_av_drug_ms": 291.0285623350493
+  },
+  "n2_hasta_k_dose_scale": {
+    "adjusted_doses": {
+      "Digoksin (literatür kalibrasyonlu -- böbrek fonksiyonuna duyarlı)": 2.736,
+      "Esmolol (literatür kalibrasyonlu)": 114.0
+    },
+    "is_safe": true,
+    "reasoning": "İstatistiksel Loewe additivity modeli, mevcut doz ORANINI koruyarak 3.00 katına kadar çıkarmanın güvenli olduğunu buluyor (bradikardi riski %0.0, eşik %5).",
+    "scale": 3.0,
+    "stats": {
+      "mean_min_hr": 57.20680480559514,
+      "p5_min_hr": 55.93760359371736,
+      "p95_min_hr": 58.81073617585082,
+      "pct_bradycardia_risk": 0.0
+    }
+  },
+  "n2_hasta_k_recommend_dose": {
+    "dose_mg": 20.0,
+    "electrolyte_warning": true,
+    "is_safe": true,
+    "mechanical_risk": false,
+    "polypharmacy_risk": true,
+    "reasoning": "İstatistiksel PK/PD modeli 20.0 mg'ı güvenli buluyor (bradikardi riski %0.0, eşik %5). TEHLİKELİ KOMBİNASYON UYARISI: Digoksin (literatür kalibrasyonlu -- böbrek fonksiyonuna duyarlı) ile birlikte verildiğinde bradikardi riski %0.0'den %4.2'e çıkıyor -- bu ilacın veya diğerinin dozunun azaltılması, ya da yakın izlem gerekebilir. LAB UYARISI: Hastanın elektrolit değerleri normal aralık dışında (potasyum 6.5 mEq/L (normal 3.5-5.0)) -- bu, kalbin iletim hızını ve/veya kontraktilitesini bağımsız olarak etkileyebilir (bkz. CircAdapt sonuçları), bu ilacın etkisiyle ETKİLEŞEBİLİR. Yakın EKG/lab izlemi düşünün.",
+    "statistical_dose_mg": 20.0,
+    "stats": {
+      "mean_min_hr": 74.34200528811954,
+      "p5_min_hr": 72.90095744498979,
+      "p95_min_hr": 75.51240174890467,
+      "pct_bradycardia_risk": 0.0
+    }
+  },
+  "n2_opposite_circadapt": {
+    "av_block_triggered": false,
+    "hr_base": 78.0,
+    "hr_drug_model": 77.24313497821326,
+    "tau_av_base_ms": 135.76923076923077,
+    "tau_av_drug_ms": 145.55717330913436
+  },
+  "n2_opposite_loewe_error": "loewe_combined_effect: tüm emax değerleri AYNI yönde (hepsi >=0 ya da hepsi <0) olmalı -- zıt yönlü ilaç kombinasyonları için Loewe additivity anlamlı değil, additive modeli kullanın."
+}
