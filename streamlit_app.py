@@ -750,10 +750,29 @@ with tab_drug:
                  "karşılaştırır. Seçilen ilaçların emax'ı (nabzı düşürme/"
                  "artırma yönü) AYNI olmalı -- aksi halde bu hesap atlanır.",
         )
+
+        # ADIM 5 (N_DRUG_AUDIT.md/RESEARCH_N_DRUG.md): "hangi ilacın dozu
+        # optimize edilsin" sorusu N=2'de de, N≥3'te de aynı klinik
+        # belirsizlik -- eskiden SADECE N=2'de (drugs[0] sabit varsayımıyla)
+        # cevaplanıyordu, N≥3'te bu panel TAMAMEN devre dışı kalıyordu.
+        # Artık kullanıcı hangi ilacı optimize etmek istediğini AÇIKÇA
+        # seçiyor, diğer TÜM ilaçlar "zaten kullanılan diğer ilaç(lar)"
+        # rolünde sabit kalıyor -- recommend_dose()'un polypharmacy_result
+        # mekanizması zaten N ilaca açık (bkz. simulation.py).
+        target_drug_key = st.selectbox(
+            "Doz önerisi hangi ilaç için hesaplansın?",
+            options=drug_keys,
+            format_func=lambda k: all_drugs[k].display_name,
+            help="Seçilen ilacın dozu, DİĞER seçili ilaç(lar) sabit/mevcut "
+                 "haliyle kullanılıyor varsayılarak optimize edilir -- "
+                 "'hangi ilacın dozu ayarlansın' klinik bir tercih olduğu "
+                 "için otomatik seçilmiyor.",
+        )
     else:
         interaction_matrix = None
         pk_interaction_matrix = None
         compare_with_loewe = False
+        target_drug_key = drug_keys[0]
 
 patient = Patient(
     name="Canlı Demo Hastası", weight_kg=weight, height_cm=height,
@@ -774,7 +793,7 @@ current_inputs = (
     tuple(drug_keys), patient.age, patient.weight_kg, patient.height_cm, patient.baseline_hr,
     patient.baseline_sbp, patient.renal_function, patient.hepatic_function,
     patient.potassium_mEqL, patient.calcium_mgdL, patient.comorbidity,
-    tuple((d.dose_mg, d.ec50) for d in drugs), n_runs, compare_with_loewe,
+    tuple((d.dose_mg, d.ec50) for d in drugs), n_runs, compare_with_loewe, target_drug_key,
 )
 
 # --- Sekme 3: Simülasyon ---
@@ -818,30 +837,35 @@ with tab_sim:
             with st.spinner("En iyi doz önerisi hesaplanıyor (istatistiksel + mekanik risk)..."):
                 if len(drugs) == 1:
                     dose_rec = recommend_dose(patient, drug, circadapt_results=heart_result)
-                elif len(drugs) == 2:
-                    # İkili polifarmasi: drugs[0]'ın dozunu, drugs[1]'in
-                    # VARLIĞINI hesaba katarak öneriyoruz -- recommend_dose()
-                    # zaten "bu ilaç + diğerinin BİRLEŞİK riski" mantığıyla
-                    # çalışıyor (bkz. simulation.py > recommend_dose,
-                    # polypharmacy_result parametresi). 3+ ilaçta "hangi
-                    # ilacın dozu optimize edilsin" belirsiz bir karar olduğu
-                    # için bu panel sadece 2 ilaçta çalışıyor.
-                    dose_rec = recommend_dose(
-                        patient, drugs[0], circadapt_results=heart_result,
-                        polypharmacy_result=mc_result, polypharmacy_description=drugs[1].display_name,
-                    )
                 else:
-                    dose_rec = None
+                    # N≥2 GENEL hali (ADIM 5 -- eskiden SADECE N=2 çalışırdı):
+                    # kullanıcının seçtiği hedef ilacın dozu, DİĞER TÜM
+                    # seçili ilaç(lar) sabit/mevcut haliyle kullanılıyor
+                    # varsayılarak öneriliyor -- recommend_dose() zaten
+                    # "bu ilaç + diğerlerinin BİRLEŞİK riski" mantığıyla
+                    # çalışıyor (polypharmacy_result=mc_result, N ilacın
+                    # TAMAMININ birleşik simülasyonu -- N=2'de eski davranışla
+                    # BİREBİR AYNI, sadece "diğer ilaç" artık TEK bir isim
+                    # değil, hedef DIŞINDAKİ TÜM ilaçların isim listesi).
+                    target_idx = drug_keys.index(target_drug_key)
+                    target_drug = drugs[target_idx]
+                    other_names = ", ".join(
+                        d.display_name for i, d in enumerate(drugs) if i != target_idx
+                    )
+                    dose_rec = recommend_dose(
+                        patient, target_drug, circadapt_results=heart_result,
+                        polypharmacy_result=mc_result, polypharmacy_description=other_names,
+                    )
 
             polypharmacy_scale_rec = None
             polypharmacy_scale_error = None
-            if len(drugs) > 2:
-                # 3+ ilaçta "hangi ilacın dozu optimize edilsin" klinik
-                # olarak belirsiz -- bunun yerine TÜM dozları kullanıcının
-                # SEÇTİĞİ ORANI koruyarak ortak bir katsayıyla ölçekleyip
-                # güvenli sınırı arıyoruz (bkz. simulation.py >
-                # recommend_polypharmacy_dose_scale). Sadece bir BİLGİ
-                # notu -- slider değerlerini otomatik DEĞİŞTİRMEZ.
+            if len(drugs) >= 2:
+                # Hedef-ilaç önerisinin YANINDA, TÜM dozları kullanıcının
+                # SEÇTİĞİ ORANI koruyarak ortak bir katsayıyla ölçekleyen
+                # tamamlayıcı bir görünüm (bkz. simulation.py >
+                # recommend_polypharmacy_dose_scale) -- N=2'de de N≥3'te de
+                # yararlı bir ikinci bakış açısı, slider değerlerini
+                # otomatik DEĞİŞTİRMEZ.
                 with st.spinner("N-ilaçlı doz ölçeği önerisi hesaplanıyor (Loewe additivity)..."):
                     try:
                         polypharmacy_scale_rec = recommend_polypharmacy_dose_scale(
@@ -887,38 +911,40 @@ with tab_sim:
             )
 
         # --- Doz önerisi (istatistiksel + CircAdapt mekanik risk birleşimi) ---
+        # ADIM 5: dose_rec artık N=1..8 ilaçta HER ZAMAN hesaplanıyor (kullanıcının
+        # seçtiği hedef ilaç için, diğerleri sabit varsayılarak) -- eskiden N>2'de
+        # None kalıp bu panel tamamen devre dışı kalıyordu.
         dose_rec = sim["dose_rec"]
         polypharmacy_scale_rec = sim.get("polypharmacy_scale_rec")
         polypharmacy_scale_error = sim.get("polypharmacy_scale_error")
-        if dose_rec is None and polypharmacy_scale_rec is not None:
-            adjusted_lines = "\n".join(
-                f"- **{name}**: {mg:.2f} mg" for name, mg in polypharmacy_scale_rec["adjusted_doses"].items()
-            )
-            box = st.success if polypharmacy_scale_rec["is_safe"] else st.warning
-            box(
-                f"**Önerilen doz ölçeği: mevcut oranın x{polypharmacy_scale_rec['scale']:.2f} katı**\n\n"
-                f"{polypharmacy_scale_rec['reasoning']}\n\n"
-                f"Buna göre önerilen dozlar (SLIDER'LAR OTOMATİK DEĞİŞMEDİ, bilgi amaçlıdır):\n{adjusted_lines}"
-            )
-        elif dose_rec is None and polypharmacy_scale_error is not None:
-            st.info(
-                f"3+ ilaçlı doz ölçeği önerisi hesaplanamadı: {polypharmacy_scale_error} "
-                "(muhtemelen ilaçların etki yönleri -- Emax işaretleri -- birbirinden farklı, "
-                "bkz. pd.py > loewe_combined_effect). Kombinasyonun risk düzeyini aşağıdaki "
-                "Klinik Özet ve CircAdapt Sonuçları sekmesinden inceleyebilirsiniz."
-            )
-        elif dose_rec is None:
-            st.info(
-                f"{len(sim['drugs'])} ilaç aynı anda seçildiği için otomatik doz "
-                "önerisi şu an desteklenmiyor. Kombinasyonun risk düzeyini aşağıdaki "
-                "Klinik Özet ve CircAdapt Sonuçları sekmesinden inceleyebilirsiniz."
-            )
-        elif dose_rec["mechanical_risk"]:
+
+        if dose_rec["mechanical_risk"]:
             st.error(f"**Önerilen doz: {dose_rec['dose_mg']:.1f} mg**\n\n{dose_rec['reasoning']}")
         elif dose_rec["is_safe"]:
             st.success(f"**Önerilen en iyi doz: {dose_rec['dose_mg']:.1f} mg**\n\n{dose_rec['reasoning']}")
         else:
             st.warning(f"**Önerilen doz: {dose_rec['dose_mg']:.1f} mg**\n\n{dose_rec['reasoning']}")
+
+        # Ortak-ölçek görünümü (N≥2) -- hedef-ilaç önerisinin TAMAMLAYICISI,
+        # ayrı/çakışan bir öneri değil: "tüm dozları AYNI oranda birlikte
+        # ölçeklersem ne kadar güvenli" sorusuna cevap verir.
+        if polypharmacy_scale_rec is not None:
+            adjusted_lines = "\n".join(
+                f"- **{name}**: {mg:.2f} mg" for name, mg in polypharmacy_scale_rec["adjusted_doses"].items()
+            )
+            box = st.success if polypharmacy_scale_rec["is_safe"] else st.warning
+            with st.expander("Alternatif görünüm: tüm ilaçları ORTAK bir ölçekle ayarlamak", expanded=False):
+                box(
+                    f"**Önerilen doz ölçeği: mevcut oranın x{polypharmacy_scale_rec['scale']:.2f} katı**\n\n"
+                    f"{polypharmacy_scale_rec['reasoning']}\n\n"
+                    f"Buna göre önerilen dozlar (SLIDER'LAR OTOMATİK DEĞİŞMEDİ, bilgi amaçlıdır):\n{adjusted_lines}"
+                )
+        elif polypharmacy_scale_error is not None:
+            st.info(
+                f"Ortak-ölçek doz önerisi hesaplanamadı: {polypharmacy_scale_error} "
+                "(muhtemelen ilaçların etki yönleri -- Emax işaretleri -- birbirinden farklı, "
+                "bkz. pd.py > loewe_combined_effect / grouped_loewe_combined_effect)."
+            )
 
         # --- PK/PD (Monte Carlo) sonuçları ---
         st.subheader("PK/PD Simülasyonu — Nabız & Tansiyon Dağılımı")
@@ -1488,12 +1514,6 @@ with tab_report:
             st.warning(
                 "Hasta/ilaç girdilerini değiştirdiniz. Rapor hâlâ eski girdilerle "
                 "hesaplanmış son simülasyonu yansıtacak."
-            )
-
-        if sim["dose_rec"] is None:
-            st.warning(
-                "3+ ilaçlı polifarmasi senaryosunda doz önerisi hesaplanmadığı için "
-                "rapor bu bölümü boş gösterecek."
             )
 
         heart = sim["heart_result"]
