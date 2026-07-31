@@ -1482,26 +1482,34 @@ def test_run_monte_carlo_dobutamine_end_to_end_runs_with_infusion_model():
 
 
 def test_av_conduction_cumulative_multiplier_normal_electrolyte_no_drug():
-    """Normal K+ (4.25), AV-duyarlı ilaç yok -- çarpan tam 1.0 olmalı."""
-    m = av_conduction_cumulative_multiplier(np.array([1.0, 1.0]), False, 4.25)
+    """Normal K+ (4.25), AV-duyarlı ilaç yok (boş liste) -- çarpan tam 1.0 olmalı."""
+    m = av_conduction_cumulative_multiplier([], 4.25)
     assert np.allclose(m, 1.0)
 
 
 def test_av_conduction_cumulative_multiplier_scales_with_electrolyte_only():
-    m = av_conduction_cumulative_multiplier(np.array([1.0]), False, 6.5)
+    m = av_conduction_cumulative_multiplier([], 6.5)
     expected = 1.0 + 0.3 * (6.5 - 5.0)  # potassium_av_conduction_factor formülü
-    assert m[0] == pytest.approx(expected)
+    assert m == pytest.approx(expected)
 
 
 def test_av_conduction_cumulative_multiplier_divides_by_hr_fraction_when_av_sensitive():
     hr_fraction = np.array([0.5])  # nabız yarıya inmiş (AV-duyarlı ilaç etkisi)
-    m = av_conduction_cumulative_multiplier(hr_fraction, True, 4.25)
+    m = av_conduction_cumulative_multiplier([hr_fraction], 4.25)
     assert m[0] == pytest.approx(1.0 / 0.5)
+
+
+def test_av_conduction_cumulative_multiplier_accumulates_per_drug_like_circadapt():
+    """Şüphe E / ADR-3 fix: N≥2 AV-duyarlı ilaçta çarpan İLAÇ-BAŞINA SIRAYLA
+    çarpımsal birikmeli -- integrate_drug_with_circadapt.py >
+    cumulative_av_conduction_multiplier() ile BİREBİR AYNI formül."""
+    m = av_conduction_cumulative_multiplier([np.array([0.8]), np.array([0.7])], 4.25)
+    assert m[0] == pytest.approx(1.0 / 0.8 / 0.7)
 
 
 def test_discrete_av_block_mask_no_crossing_stays_all_false():
     hr = np.full(50, 78.0)  # bazal, hiç düşmüyor
-    mask = discrete_av_block_mask(hr, baseline_hr=78.0, av_sensitive_drug_present=False,
+    mask = discrete_av_block_mask(hr, baseline_hr=78.0, av_sensitive_hr_fractions=[],
                                    potassium_mEqL=4.25, threshold_multiplier=AV_BLOCK_THRESHOLD_MULTIPLIER)
     assert not mask.any()
 
@@ -1511,7 +1519,8 @@ def test_discrete_av_block_mask_latches_from_first_crossing_onward():
     # hr_fraction küçüldükçe multiplier büyür, bir noktada eşiği (3.0) aşar.
     baseline_hr = 78.0
     hr = np.linspace(78.0, 20.0, 100)
-    mask = discrete_av_block_mask(hr, baseline_hr, av_sensitive_drug_present=True,
+    hr_fraction = hr / baseline_hr
+    mask = discrete_av_block_mask(hr, baseline_hr, av_sensitive_hr_fractions=[hr_fraction],
                                    potassium_mEqL=6.5, threshold_multiplier=AV_BLOCK_THRESHOLD_MULTIPLIER)
     assert mask.any()
     first_idx = int(np.argmax(mask))
@@ -1525,7 +1534,7 @@ def test_apply_discrete_av_block_no_trigger_regression():
     patients = load_patients("configs/patients.yaml")
     patient = patients["hasta_a"]  # normal K+=4.25, known_av_block_degree=None
     hr = np.full(50, 65.0)
-    result = apply_discrete_av_block(hr.copy(), patient, av_sensitive_drug_present=True)
+    result = apply_discrete_av_block(hr.copy(), patient, [hr / patient.baseline_hr])
     assert np.array_equal(result, hr)
 
 
@@ -1536,7 +1545,7 @@ def test_apply_discrete_av_block_triggers_escape_rhythm_for_hyperkalemic_av_sens
     baseline_hr = patient.baseline_hr
     # hr_fraction 0.4'e kadar düşüyor (nabız %60 baskılanmış) -- multiplier = 1.45/0.4 = 3.625 > 3.0
     hr = np.linspace(baseline_hr, baseline_hr * 0.4, 100)
-    result = apply_discrete_av_block(hr, patient, av_sensitive_drug_present=True)
+    result = apply_discrete_av_block(hr, patient, [hr / baseline_hr])
     assert result[-1] == pytest.approx(AV_BLOCK_ESCAPE_RHYTHM_HR)
     assert not np.array_equal(result, hr)
 
@@ -1545,7 +1554,7 @@ def test_apply_discrete_av_block_known_third_degree_starts_at_t0():
     patients = load_patients("configs/patients.yaml")
     patient = replace(patients["hasta_a"], known_av_block_degree="third")
     hr = np.full(50, 78.0)  # normal, ilaçsız trace olsa bile
-    result = apply_discrete_av_block(hr, patient, av_sensitive_drug_present=False)
+    result = apply_discrete_av_block(hr, patient, [])
     assert np.all(result == AV_BLOCK_ESCAPE_RHYTHM_HR)
 
 

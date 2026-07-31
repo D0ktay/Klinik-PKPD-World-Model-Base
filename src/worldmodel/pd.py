@@ -105,10 +105,17 @@ def loewe_combined_effect(concentrations: list[np.ndarray], ec50s: list[float],
     BİLİNEN KAPSAM SINIRI: bu formül birleşik etkiyi min(emax_i) ile
     sınırlıyor -- yüksek tavanlı bir ilaç, düşük tavanlı ortağıyla
     birleşince o düşük tavanı MATEMATİKSEL OLARAK aşamıyor. Grabovsky-
-    Tallarida'nın tam-agonist/kısmi-agonist ayrımı bu sınırı kaldırıyor ama
-    önemli ölçüde daha karmaşık -- bu proje kapsamında (ilaçların Emax'ları
-    aynı büyüklük mertebesinde) bu sınırlama kabul edilebilir bilinçli bir
-    basitleştirme.
+    Tallarida'nın tam-agonist/kısmi-agonist ayrımı (eğrisel izobol) bu
+    sınırı KALDIRMIYOR -- SADECE potens oranı sabit olmadığında additive
+    izobolün ŞEKLİNİ (düz yerine eğri) düzeltiyor, ulaşılabilir tavan yine
+    min(emax_i)'de kalıyor (bkz. RESEARCH_N_DRUG.md §1.1, ADR-5 --
+    literatürde (MuSyC hariç, o da bu proje için kalibrasyon verisi
+    eksikliği nedeniyle UYGULANAMAZ, bkz. ADR-1) bu tavanı prensipli
+    şekilde kaldıran bir yöntem YOK). N büyüdükçe (N≥3) bu kısıt DAHA SIK
+    bağlayıcı hale gelir -- en düşük-Emax'lı TEK ilaç, kaç ilaç eklenirse
+    eklensin tüm kombinasyonun tavanını belirler. KARAR: kaldırılmıyor,
+    bunun yerine kullanıcıya (streamlit_app.py, ADIM 6) hangi ilacın
+    tavanı belirlediği AÇIKÇA gösteriliyor.
 
     concentrations: her ilacın (aynı uzunlukta) zaman dizisi -- HR için
         effect_compartment_concentration(..., keo_hr, ...) çıktısı, SBP için
@@ -150,6 +157,49 @@ def loewe_combined_effect(concentrations: list[np.ndarray], ec50s: list[float],
         hi = np.where(f_mid > 0, hi, mid)
 
     return sign * (lo + hi) / 2
+
+
+def grouped_loewe_combined_effect(concentrations: list[np.ndarray], ec50s: list[float],
+                                   emaxes: list[float], n_iterations: int = 40) -> np.ndarray:
+    """
+    loewe_combined_effect()'in ZIT YÖNLÜ ilaç kombinasyonlarını da kabul
+    eden versiyonu (N_DRUG_AUDIT.md Şüphe D, RESEARCH_N_DRUG.md ADR-4).
+
+    ⚠️ MÜHENDİSLİK KARARI -- LİTERATÜR KAYNAĞI YOK: ne Loewe additivity ne
+    de araştırılan diğer yöntemler (Bliss, HSA, MuSyC, ZIP -- bkz.
+    RESEARCH_N_DRUG.md §1) zıt yönlü etkileri (bir ilaç azaltır, biri
+    artırır) formel olarak ele alıyor -- hiçbiri bunu N ilaca genellenmiş,
+    yayınlanmış bir yöntemle çözmüyor. Bu fonksiyon PROJENİN KENDİ,
+    literatürden gelmeyen pragmatik kararı: ilaçlar Emax işaretine göre iki
+    gruba ayrılır (azaltanlar / artıranlar), HER GRUP KENDİ İÇİNDE
+    loewe_combined_effect() ile birleştirilir (aynı yönde etki eden ilaçlar
+    için Loewe hâlâ geçerli), İKİ GRUBUN NET SONUCU ise BASİT TOPLAM ile
+    hesaplanır -- loewe_combined_effect() zaten İŞARETLİ bir delta
+    döndürdüğü için (azaltan grup pozitif, artıran grup negatif), toplamları
+    almak otomatik olarak "net = fark" anlamına gelir.
+
+    TEK GRUP (tüm ilaçlar aynı yönde) durumunda bu fonksiyon
+    loewe_combined_effect()'in SAYISAL OLARAK BİREBİR AYNISINI döndürür --
+    yani mevcut aynı-yönlü N=1/N=2 senaryolarında (tests/test_no_regression_n_drug.py)
+    davranış DEĞİŞMEZ. Sadece zıt yönlü bir kombinasyon verildiğinde
+    (öncesinde loewe_combined_effect()'in ValueError fırlattığı durum)
+    farklı, artık TANIMLI bir sonuç üretir.
+
+    Dönüş: loewe_combined_effect() ile aynı birimde (fizyolojik, örn. bpm),
+    işaretli net delta.
+    """
+    positive_idx = [i for i, e in enumerate(emaxes) if e >= 0]
+    negative_idx = [i for i, e in enumerate(emaxes) if e < 0]
+
+    net = np.zeros_like(concentrations[0])
+    for group_idx in (positive_idx, negative_idx):
+        if not group_idx:
+            continue
+        group_conc = [concentrations[i] for i in group_idx]
+        group_ec50 = [ec50s[i] for i in group_idx]
+        group_emax = [emaxes[i] for i in group_idx]
+        net = net + loewe_combined_effect(group_conc, group_ec50, group_emax, n_iterations=n_iterations)
+    return net
 
 
 # İlaç sınıfları -- CircAdapt entegrasyonundaki (integrate_drug_with_circadapt.py
@@ -196,44 +246,48 @@ def electrolyte_adjusted_emax_sbp(emax_sbp: float, drug_class: str | None,
     return emax_sbp * calcium_contractility_factor(calcium_mgdL)
 
 
-def av_conduction_cumulative_multiplier(hr_fraction, av_sensitive_drug_present: bool,
-                                         potassium_mEqL: float):
+def av_conduction_cumulative_multiplier(av_sensitive_hr_fractions: list, potassium_mEqL: float):
     """
     CircAdapt tarafının `Timings.c_tau_av1` üzerinde biriktirdiği KÜMÜLATİF
-    çarpanın (bkz. integrate_drug_with_circadapt.py > apply_patient_
-    electrolytes_to_circadapt: `c_tau_av1 *= k_factor`; apply_drug_effect_
-    to_circadapt: AV_NODE_SENSITIVE_DRUG_CLASSES için `c_tau_av1 /= hr_fraction`)
-    istatistiksel motordaki (bu dosyanın kendi elemanlarıyla kurulmuş) KARŞILIĞI
-    -- discrete_av_block_mask() fonksiyonunun eşik kontrolü için kullanılır.
+    çarpanın (bkz. integrate_drug_with_circadapt.py >
+    cumulative_av_conduction_multiplier() -- kanonik/referans formül)
+    istatistiksel motordaki KARŞILIĞI -- discrete_av_block_mask()
+    fonksiyonunun eşik kontrolü için kullanılır.
 
-    YAKLAŞIKLIK NOTU: istatistiksel motor CircAdapt gibi ilaçları SIRAYLA
-    çarpımsal biriktirmiyor (additive model -- bkz. run_polypharmacy_simulation
-    docstring'i); burada TÜM ilaçların BİRLEŞİK (zaten toplanmış) hr_fraction'ı
-    tek bir "AV-sensitive ilaç var mı" bayrağıyla birlikte AYNI k_factor/
-    hr_fraction formülüne sokuluyor. Bu, CircAdapt'in ilaç-başına çarpımsal
-    birikimini BİREBİR TEKRARLAMIYOR (o, ayrı ve çok daha büyük bir mimari
-    değişiklik gerektirirdi) -- sadece AYNI fiziksel yönü (AV-sensitive ilaç +
-    hiperkalemi -> büyüyen çarpan) aynı formülle, mevcut additive motorun
-    ÇIKTISI üzerinden yaklaşık olarak yeniden üretiyor.
+    DÜZELTME (N_DRUG_AUDIT.md Şüphe E, RESEARCH_N_DRUG.md ADR-3): bu
+    fonksiyon ÖNCEDEN (bkz. git geçmişi) TÜM ilaçların BİRLEŞİK (zaten
+    additive/Loewe ile toplanmış) TEK bir hr_fraction'ını, "AV-sensitive
+    ilaç var mı" bayrağıyla birlikte, TEK SEFERDE k_factor'a bölüyordu --
+    bu SADECE bir YAKLAŞIKLIKTI ve CircAdapt'in gerçek ilaç-başına
+    çarpımsal birikiminden N büyüdükçe HIZLA sapıyordu (izole ölçüm: N=2'de
+    %1.7, N=5'te %52 fark). Artık integrate_drug_with_circadapt.py >
+    cumulative_av_conduction_multiplier() İLE BİREBİR AYNI matematiği
+    uyguluyor: k_factor'dan başla, HER AV-duyarlı ilaç için AYRI AYRI,
+    SIRAYLA çarpımsal olarak böl -- iki motor artık AYNI formülü paylaşıyor,
+    sapma ölçülüp belgelenmek yerine GİDERİLDİ.
 
-    hr_fraction: anlık nabız / bazal nabız (np.ndarray veya float) -- 0'a
-        bölünmeyi önlemek için 1e-6'da alt sınırlanır (hr zaten 0'da
-        clip'leniyor, ama emniyet için).
-    av_sensitive_drug_present: rejimdeki ilaçlardan EN AZ biri
-        AV_NODE_SENSITIVE_DRUG_CLASSES'taysa True -- CircAdapt'teki gibi,
-        sadece elektrolit varsa (ilaç yok/AV-duyarsız) çarpan k_factor'da
-        sabit kalır, hr_fraction'a bölünmez.
+    av_sensitive_hr_fractions: AV_NODE_SENSITIVE_DRUG_CLASSES'taki HER
+        ilacın KENDİ İZOLE hr_fraction'ı (yeni_nabız/bazal_nabız, o ilaç
+        TEK BAŞINA verilseydi ne olurdu) -- listedeki SIRA, çağıranın
+        ilaçları uyguladığı sırayla AYNI olmalı (integrate_drug_with_
+        circadapt.py > run_with_multiple_drugs ile tutarlılık için, though
+        çarpma commutative olduğundan matematiksel sonuç sıradan bağımsız
+        -- bkz. N_DRUG_AUDIT.md Şüphe G, çalışma-zamanında doğrulandı).
+        AV-duyarsız ilaçlar bu listede YER ALMAZ. Boş liste = rejimde
+        AV-duyarlı ilaç yok (CircAdapt'teki "sadece k_factor" durumuyla
+        aynı).
 
-    Dönüş: hr_fraction ile aynı şekilde (np.ndarray ya da float) kümülatif çarpan.
+    Dönüş: liste elemanlarıyla aynı şekilde (np.ndarray ya da float)
+    kümülatif çarpan; liste boşsa skaler k_factor.
     """
-    k_factor = potassium_av_conduction_factor(potassium_mEqL)
-    if not av_sensitive_drug_present:
-        return np.full_like(np.asarray(hr_fraction, dtype=float), k_factor) if isinstance(hr_fraction, np.ndarray) else k_factor
-    safe_fraction = np.clip(hr_fraction, 1e-6, None)
-    return k_factor / safe_fraction
+    multiplier = potassium_av_conduction_factor(potassium_mEqL)
+    for hr_fraction in av_sensitive_hr_fractions:
+        safe_fraction = np.clip(hr_fraction, 1e-6, None)
+        multiplier = multiplier / safe_fraction
+    return multiplier
 
 
-def discrete_av_block_mask(hr: np.ndarray, baseline_hr: float, av_sensitive_drug_present: bool,
+def discrete_av_block_mask(hr: np.ndarray, baseline_hr: float, av_sensitive_hr_fractions: list,
                             potassium_mEqL: float, threshold_multiplier: float) -> np.ndarray:
     """
     hr zaman dizisindeki, av_conduction_cumulative_multiplier()'ın
@@ -248,11 +302,13 @@ def discrete_av_block_mask(hr: np.ndarray, baseline_hr: float, av_sensitive_drug
     periyodiklik gibi) mevcut soyutlama seviyesinin ötesinde -- bkz.
     CALIBRATION_REPORT.md Gap #3 notu.
 
+    av_sensitive_hr_fractions: bkz. av_conduction_cumulative_multiplier().
+
     Çağıran, True olan indekslerdeki hr değerlerini AV_BLOCK_ESCAPE_RHYTHM_HR
     ile DEĞİŞTİRİR (bu fonksiyon hr'yi değiştirmez, sadece maskeyi üretir).
     """
-    hr_fraction = hr / baseline_hr
-    multiplier = av_conduction_cumulative_multiplier(hr_fraction, av_sensitive_drug_present, potassium_mEqL)
+    multiplier = av_conduction_cumulative_multiplier(av_sensitive_hr_fractions, potassium_mEqL)
+    multiplier = np.broadcast_to(np.asarray(multiplier, dtype=float), hr.shape)
     crossed = multiplier >= threshold_multiplier
     mask = np.zeros_like(crossed, dtype=bool)
     if crossed.any():

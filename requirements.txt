@@ -2,6 +2,7 @@ numpy>=1.24
 matplotlib>=3.7
 pyyaml>=6.0
 pytest>=7.4
+hypothesis>=6.100  # N-ilaç kombinasyon motoru için property-based test (tests/test_n_drug_statistical.py)
 streamlit>=1.32
 fpdf2>=2.8
 pandas>=2.0

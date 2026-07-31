@@ -844,7 +844,10 @@ with tab_sim:
                 # notu -- slider değerlerini otomatik DEĞİŞTİRMEZ.
                 with st.spinner("N-ilaçlı doz ölçeği önerisi hesaplanıyor (Loewe additivity)..."):
                     try:
-                        polypharmacy_scale_rec = recommend_polypharmacy_dose_scale(patient, drugs, n_realizations=150)
+                        polypharmacy_scale_rec = recommend_polypharmacy_dose_scale(
+                            patient, drugs, n_realizations=150,
+                            drug_keys=drug_keys, pk_interaction_matrix=pk_interaction_matrix,
+                        )
                     except ValueError as e:
                         polypharmacy_scale_error = str(e)
 

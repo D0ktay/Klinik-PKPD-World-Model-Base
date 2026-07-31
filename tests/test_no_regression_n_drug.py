@@ -188,11 +188,29 @@ def test_n2_opposite_direction_additive_no_regression(world, golden_arrays):
     assert_arrays_match(golden_arrays, "n2_opposite_additive", result)
 
 
-def test_n2_opposite_direction_loewe_still_raises(world, golden_scalars):
+def test_n2_opposite_direction_loewe_now_returns_grouped_result_not_error(world, golden_scalars):
+    """
+    ADIM 3.4 (Şüphe D / ADR-4) KASITLI davranış değişikliği: golden
+    snapshot alındığında (ADIM 2) bu kombinasyon ValueError fırlatıyordu
+    (mesaj golden_scalars["n2_opposite_loewe_error"]'da donduruldu, bkz.
+    generate_golden_snapshots.py). pd.grouped_loewe_combined_effect()
+    eklendikten SONRA artık ValueError YERİNE tanımlı bir sonuç üretiyor --
+    bu, kullanıcının ADIM 3 talimatında AÇIKÇA istediği, dondurulmuş
+    eski davranışla KARŞILAŞTIRILABİLİR bir değişiklik (MUTLAK KURAL #1'in
+    istisnası -- kural N=1/N=2'nin SESSİZCE değişmemesini istiyor, bu
+    burada açıkça belgeleniyor ve test ediliyor).
+    """
     combo = [world["beta"], world["nicardipine"]]
-    with pytest.raises(ValueError) as excinfo:
-        run_polypharmacy_simulation_loewe(world["hasta_a"], combo, **mc_kwargs())
-    assert str(excinfo.value) == golden_scalars["n2_opposite_loewe_error"]
+    result = run_polypharmacy_simulation_loewe(world["hasta_a"], combo, **mc_kwargs())
+
+    assert np.isfinite(result.hr_runs).all()
+    assert np.isfinite(result.sbp_runs).all()
+    assert (result.hr_runs >= 0).all()
+    assert (result.sbp_runs >= 0).all()
+    # Eskiden bu satıra hiç ulaşılamıyordu (ValueError) -- artık golden
+    # snapshot'taki additive yol sonucuyla (n2_opposite_additive) AYNI
+    # büyüklük mertebesinde, makul bir HR profili üretiyor.
+    assert 30 < result.hr_runs.mean() < 130
 
 
 def test_n2_opposite_direction_circadapt_no_regression(world, golden_arrays, golden_scalars):

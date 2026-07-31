@@ -17,6 +17,7 @@ from .pk import (
 )
 from .pd import (
     emax_effect, apply_effect_to_vitals, effect_compartment_concentration, loewe_combined_effect,
+    grouped_loewe_combined_effect,
     electrolyte_adjusted_emax_hr, electrolyte_adjusted_emax_sbp,
     AV_NODE_SENSITIVE_DRUG_CLASSES, discrete_av_block_mask,
     AV_BLOCK_THRESHOLD_MULTIPLIER, AV_BLOCK_ESCAPE_RHYTHM_HR,
@@ -38,6 +39,14 @@ class SimulationResult:
     # None bırakılır (tekil bir "bu deneme" değeri anlamlı değildir).
     ke_values: np.ndarray | None = None
     sensitivity_values: np.ndarray | None = None
+    # N_DRUG_AUDIT.md Şüphe H: conc_runs (yukarıda) SADECE ilk ilacın
+    # konsantrasyonunu taşır (geriye dönük uyumluluk için DEĞİŞTİRİLMEDİ --
+    # mevcut tüketiciler, varsa, bunu değiştirmeden okumaya devam eder).
+    # all_conc_runs, run_polypharmacy_simulation()/run_polypharmacy_simulation_loewe()
+    # tarafından doldurulan YENİ, EK bir alan -- şekli (n_drugs, n_realizations,
+    # n_timepoints), TÜM ilaçların konsantrasyonunu ayrı ayrı taşır. Tekil-ilaç
+    # fonksiyonlarında (run_monte_carlo vb.) None kalır.
+    all_conc_runs: np.ndarray | None = None
 
 
 def get_plasma_concentration(drug: Drug, t: np.ndarray, weight_kg: float, ke: float) -> np.ndarray:
@@ -70,7 +79,7 @@ def get_plasma_concentration(drug: Drug, t: np.ndarray, weight_kg: float, ke: fl
     )
 
 
-def apply_discrete_av_block(hr: np.ndarray, patient: Patient, av_sensitive_drug_present: bool) -> np.ndarray:
+def apply_discrete_av_block(hr: np.ndarray, patient: Patient, av_sensitive_hr_fractions: list) -> np.ndarray:
     """
     Discrete (all-or-nothing) AV blok -- Gap #3 (bkz. pd.py > discrete_av_block_mask,
     AV_BLOCK_THRESHOLD_MULTIPLIER, AV_BLOCK_ESCAPE_RHYTHM_HR).
@@ -81,9 +90,15 @@ def apply_discrete_av_block(hr: np.ndarray, patient: Patient, av_sensitive_drug_
          İTİBAREN tüm izi kaçış ritmine sabitler (bu, ilaç/elektrolitten
          bağımsız, kalıcı bir hasta durumu).
       2. Yukarıdaki DEĞİLSE: potassium_av_conduction_factor + (varsa)
-         AV-duyarlı ilaç etkisinin kümülatif çarpanı AV_BLOCK_THRESHOLD_
-         MULTIPLIER'ı aştığı noktadan itibaren (mandal/latch -- bkz.
-         discrete_av_block_mask docstring'i) kaçış ritmine geçer.
+         AV-duyarlı ilaç(lar)ın etkisinin kümülatif (ilaç-başına çarpımsal,
+         bkz. pd.py > av_conduction_cumulative_multiplier) çarpanı
+         AV_BLOCK_THRESHOLD_MULTIPLIER'ı aştığı noktadan itibaren
+         (mandal/latch -- bkz. discrete_av_block_mask docstring'i) kaçış
+         ritmine geçer.
+
+    av_sensitive_hr_fractions: bkz. pd.py > av_conduction_cumulative_multiplier
+        -- her AV-duyarlı ilacın İZOLE hr_fraction'ı (liste). Boş liste =
+        rejimde AV-duyarlı ilaç yok.
 
     Normal hastalarda (known_av_block_degree None/"none", normal K+,
     AV-duyarlı olmayan/hiç ilaç) HİÇBİR ŞEY DEĞİŞMEZ -- eşik (3.0x), normal
@@ -95,7 +110,7 @@ def apply_discrete_av_block(hr: np.ndarray, patient: Patient, av_sensitive_drug_
         return np.full_like(hr, AV_BLOCK_ESCAPE_RHYTHM_HR)
 
     mask = discrete_av_block_mask(
-        hr, patient.baseline_hr, av_sensitive_drug_present,
+        hr, patient.baseline_hr, av_sensitive_hr_fractions,
         patient.potassium_mEqL, AV_BLOCK_THRESHOLD_MULTIPLIER,
     )
     if mask.any():
@@ -193,10 +208,17 @@ def run_monte_carlo(patient: Patient, drug: Drug,
             adjusted_emax_hr, adjusted_emax_sbp, effect_fraction_sbp=effect_sbp,
         )
 
+        # AV-duyarlıysa, ÖLÇÜM GÜRÜLTÜSÜ EKLENMEDEN ÖNCEKİ izole hr_fraction'ı
+        # (=hr/bazal) yakala -- run_polypharmacy_simulation()'daki (Şüphe E /
+        # ADR-3) İLE TUTARLI: AV-blok tetikleme kararı, simüle edilmiş monitör
+        # gürültüsü gibi bir ARTEFAKTTAN değil, ilacın GERÇEK farmakolojik
+        # etkisinden gelmeli (CircAdapt tarafında da gürültü kavramı yok).
+        av_sensitive_hr_fractions = [hr / patient.baseline_hr] if drug.drug_class in AV_NODE_SENSITIVE_DRUG_CLASSES else []
+
         hr += rng.normal(0, measurement_noise_hr, size=t.shape)
         sbp += rng.normal(0, measurement_noise_sbp, size=t.shape)
 
-        hr = apply_discrete_av_block(hr, patient, drug.drug_class in AV_NODE_SENSITIVE_DRUG_CLASSES)
+        hr = apply_discrete_av_block(hr, patient, av_sensitive_hr_fractions)
 
         hr_runs[i] = hr
         sbp_runs[i] = sbp
@@ -277,6 +299,7 @@ def run_polypharmacy_simulation(patient: Patient, drugs: list[Drug],
                                  interaction_matrix: dict[tuple[int, int], float] | None = None,
                                  drug_keys: list[str] | None = None,
                                  pk_interaction_matrix: dict[tuple[str, str], float] | None = None,
+                                 symmetric_interaction_terms: bool = False,
                                  ) -> SimulationResult:
     """
     Birden fazla ilacın AYNI ANDA verildiği bir senaryoyu (polifarmasi)
@@ -320,6 +343,24 @@ def run_polypharmacy_simulation(patient: Patient, drugs: list[Drug],
     tansiyon 0'ın altına inemez (np.clip ile garanti edilir) -- toplamsal
     etkiler matematiksel olarak sınırsız büyüyebilse de, sonuç fizyolojik
     olarak anlamlı bir aralıkta kalır.
+
+    symmetric_interaction_terms (N_DRUG_AUDIT.md Şüphe B, RESEARCH_N_DRUG.md
+    ADR-6): DÜZELTME öncesi (ve varsayılan `False` iken hâlâ) interaction
+    terimi `factor * emax[a] * effect[a] * effect[b]` şeklinde -- SADECE
+    `emax[a]`'yı kullanıyor, `emax[b]`'yi YOK SAYIYOR. Bu, YAML kaydındaki
+    `drug_a`/`drug_b` sırasına bağlı, belgesiz bir asimetri kaynağı (bkz.
+    denetim -- N=6 worst-case deneyinde aynı iki ilaç, sıra değişince farklı
+    büyüklükte terim üretiyordu). `True` iken terim simetrik hale getirilir:
+    `factor * ((emax[a]+emax[b])/2) * effect[a] * effect[b]` -- iki ilacın
+    rolü artık DEĞİŞTİRİLEBİLİR (a,b sırası sonucu etkilemez).
+
+    Varsayılan `False` KORUNDU (N=1/N=2 golden-snapshot davranışı DEĞİŞMEZ,
+    bkz. tests/test_no_regression_n_drug.py) -- bu bir matematiksel DÜZELTME
+    olsa da, mevcut TEK PD-interaction kaydı (beta_bloker->digoxin) zaten
+    N=2'de kullanıldığı için simetrikleştirme o senaryonun SAYISAL çıktısını
+    değiştirirdi. Çağıran taraf (streamlit_app.py), N≥3 ilaçlı kombinasyonlarda
+    bunu `True` geçirerek düzeltilmiş formülü kullanır -- MUTLAK KURAL #1
+    gereği yeni davranış sadece opsiyonel parametreyle/N≥3'te devreye girer.
     """
     rng = np.random.default_rng(seed)
     t = np.linspace(0, hours, n_timepoints)
@@ -327,6 +368,7 @@ def run_polypharmacy_simulation(patient: Patient, drugs: list[Drug],
     hr_runs = np.zeros((n_realizations, n_timepoints))
     sbp_runs = np.zeros((n_realizations, n_timepoints))
     conc_runs = np.zeros((n_realizations, n_timepoints))  # ilk ilacın konsantrasyonu (referans/gösterim için)
+    all_conc_runs = np.zeros((len(drugs), n_realizations, n_timepoints))  # bkz. SimulationResult.all_conc_runs
 
     # bkz. run_monte_carlo -- hastanın elektrolit durumu, AV düğümünü/
     # kontraktiliteyi hedefleyen ilaç sınıflarında etkiyi büyütür. İlaç
@@ -334,7 +376,6 @@ def run_polypharmacy_simulation(patient: Patient, drugs: list[Drug],
     # kez hesaplanır.
     adjusted_emax_hr = [electrolyte_adjusted_emax_hr(d.emax_hr, d.drug_class, patient.potassium_mEqL) for d in drugs]
     adjusted_emax_sbp = [electrolyte_adjusted_emax_sbp(d.emax_sbp, d.drug_class, patient.calcium_mgdL) for d in drugs]
-    any_av_sensitive_drug = any(d.drug_class in AV_NODE_SENSITIVE_DRUG_CLASSES for d in drugs)
 
     for i in range(n_realizations):
         total_hr_delta = np.zeros(n_timepoints)
@@ -370,13 +411,20 @@ def run_polypharmacy_simulation(patient: Patient, drugs: list[Drug],
             effect_hr_list.append(effect_hr)
             effect_sbp_list.append(effect_sbp)
 
+            all_conc_runs[d_idx, i] = conc
             if d_idx == 0:
                 conc_runs[i] = conc
 
         if interaction_matrix:
             for (a, b), factor in interaction_matrix.items():
-                total_hr_delta = total_hr_delta + factor * adjusted_emax_hr[a] * effect_hr_list[a] * effect_hr_list[b]
-                total_sbp_delta = total_sbp_delta + factor * adjusted_emax_sbp[a] * effect_sbp_list[a] * effect_sbp_list[b]
+                if symmetric_interaction_terms:
+                    hr_weight = (adjusted_emax_hr[a] + adjusted_emax_hr[b]) / 2.0
+                    sbp_weight = (adjusted_emax_sbp[a] + adjusted_emax_sbp[b]) / 2.0
+                else:
+                    hr_weight = adjusted_emax_hr[a]
+                    sbp_weight = adjusted_emax_sbp[a]
+                total_hr_delta = total_hr_delta + factor * hr_weight * effect_hr_list[a] * effect_hr_list[b]
+                total_sbp_delta = total_sbp_delta + factor * sbp_weight * effect_sbp_list[a] * effect_sbp_list[b]
 
         hr = patient.baseline_hr - total_hr_delta
         sbp = patient.baseline_sbp - total_sbp_delta
@@ -385,12 +433,22 @@ def run_polypharmacy_simulation(patient: Patient, drugs: list[Drug],
         sbp += rng.normal(0, measurement_noise_sbp, size=t.shape)
 
         hr = np.clip(hr, 0, None)
-        hr = apply_discrete_av_block(hr, patient, any_av_sensitive_drug)
+        # Şüphe E / ADR-3 fix: her AV-duyarlı ilacın İZOLE hr_fraction'ı
+        # (o ilaç TEK BAŞINA verilseydi ne olurdu) -- integrate_drug_with_
+        # circadapt.py > cumulative_av_conduction_multiplier()'daki AYNI
+        # per-drug çarpımsal mantık, artık istatistiksel motorda da.
+        av_sensitive_hr_fractions = [
+            (patient.baseline_hr - adjusted_emax_hr[d_idx] * effect_hr_list[d_idx]) / patient.baseline_hr
+            for d_idx, drug in enumerate(drugs)
+            if drug.drug_class in AV_NODE_SENSITIVE_DRUG_CLASSES
+        ]
+        hr = apply_discrete_av_block(hr, patient, av_sensitive_hr_fractions)
 
         hr_runs[i] = hr
         sbp_runs[i] = np.clip(sbp, 0, None)
 
-    return SimulationResult(t=t, hr_runs=hr_runs, sbp_runs=sbp_runs, conc_runs=conc_runs)
+    return SimulationResult(t=t, hr_runs=hr_runs, sbp_runs=sbp_runs, conc_runs=conc_runs,
+                             all_conc_runs=all_conc_runs)
 
 
 def run_polypharmacy_simulation_loewe(patient: Patient, drugs: list[Drug],
@@ -400,7 +458,10 @@ def run_polypharmacy_simulation_loewe(patient: Patient, drugs: list[Drug],
                                        sensitivity_variation_sigma: float = 0.30,
                                        measurement_noise_hr: float = 1.2,
                                        measurement_noise_sbp: float = 1.5,
-                                       seed: int = 42) -> SimulationResult:
+                                       seed: int = 42,
+                                       drug_keys: list[str] | None = None,
+                                       pk_interaction_matrix: dict[tuple[str, str], float] | None = None,
+                                       ) -> SimulationResult:
     """
     run_polypharmacy_simulation()'ın Loewe additivity versiyonu -- Monte
     Carlo döngüsü (ke/sensitivity örnekleme, organ fonksiyonu ayarlaması,
@@ -411,7 +472,24 @@ def run_polypharmacy_simulation_loewe(patient: Patient, drugs: list[Drug],
 
     interaction_matrix PARAMETRESİ YOK (run_polypharmacy_simulation'daki
     gibi) -- Loewe additivity zaten doz-eşdeğerliğini hesaba kattığı için
-    ayrı bir manuel sinerji çarpanına gerek/anlam yok.
+    ayrı bir manuel sinerji çarpanına gerek/anlam yok. Bu, PD-seviyeli
+    (etki büyüklüğü) bir karar -- ama PK-seviyeli (klerens/AUC) ilaç-ilaç
+    etkileşimi AYRI bir mekanizma ve Loewe yolunda da uygulanmalı (bkz. hemen
+    altı).
+
+    DÜZELTME (N_DRUG_AUDIT.md Şüphe A -- ADR-2, RESEARCH_N_DRUG.md): bu
+    fonksiyon ÖNCEDEN drug_keys/pk_interaction_matrix parametrelerine sahip
+    değildi, yani run_polypharmacy_simulation()'daki (additive yol) PK-DDI
+    bloğunun (bkz. pk_interaction_adjusted_ke çağrısı) BİREBİR KARŞILIĞI
+    burada YOKTU -- N≥3 ilaçlı doz önerisinin (recommend_polypharmacy_
+    dose_scale, sadece bu Loewe fonksiyonunu çağırıyor) bilinen bir PK
+    etkileşimini (örn. esmolol->digoksin, Kessler 1987) SESSİZCE yok
+    saydığı anlamına geliyordu -- N=2'de additive yolda doğru uygulanan
+    aynı etkileşim, N≥3'e (Loewe yoluna) geçince kaybolan bir hataydı. Bu
+    artık additive yoldaki (simulation.py > run_polypharmacy_simulation)
+    İLE BİREBİR AYNI mantıkla düzeltildi. drug_keys/pk_interaction_matrix
+    varsayılan None ise (mevcut tüm çağrı yerleri hâlâ böyle) DAVRANIŞ
+    DEĞİŞMEZ -- regresyon yok (bkz. tests/test_no_regression_n_drug.py).
 
     Bireysel duyarlılık (sensitivity), emax_effect()'teki gibi etkiyi
     çarpıp SONRA kırpmak yerine, İLACIN KENDİ EC50'sini ölçekleyerek
@@ -420,10 +498,16 @@ def run_polypharmacy_simulation_loewe(patient: Patient, drugs: list[Drug],
     çarpıp-kırpma bu varsayımı bozardı (0-1.3 aralığına kırpma, izobol
     denkleminin monotonluk garantisini geçersiz kılar).
 
-    UYARI: tüm ilaçların emax_hr'si (ve ayrı ayrı emax_sbp'si) AYNI yönde
-    olmalı (bkz. loewe_combined_effect) -- zıt yönlü bir kombinasyon
-    (örn. beta-bloker + vazodilatörün refleks taşikardisi) burada
-    ValueError fırlatır, bu durumda run_polypharmacy_simulation() kullanın.
+    ZIT YÖNLÜ İLAÇLAR (Şüphe D / ADR-4): eskiden (bu docstring güncellenmeden
+    önce) tüm ilaçların emax_hr'sinin (ve ayrı ayrı emax_sbp'sinin) AYNI
+    yönde olması ZORUNLUYDU, aksi halde loewe_combined_effect() ValueError
+    fırlatırdı. Artık pd.py > grouped_loewe_combined_effect() kullanılıyor --
+    ilaçlar Emax işaretine göre gruplanıp her grup kendi içinde Loewe ile
+    birleştiriliyor, net etki gruplar arası (işaretli) toplam. Bu bir
+    LİTERATÜR YÖNTEMİ DEĞİL, projenin kendi mühendislik kararı (bkz. o
+    fonksiyonun docstring'i) -- ValueError artık SADECE hiç ilaç
+    verilmediğinde ya da alt fonksiyonlardan gelen başka bir hata
+    durumunda oluşur.
     """
     rng = np.random.default_rng(seed)
     t = np.linspace(0, hours, n_timepoints)
@@ -431,7 +515,7 @@ def run_polypharmacy_simulation_loewe(patient: Patient, drugs: list[Drug],
     hr_runs = np.zeros((n_realizations, n_timepoints))
     sbp_runs = np.zeros((n_realizations, n_timepoints))
     conc_runs = np.zeros((n_realizations, n_timepoints))
-    any_av_sensitive_drug = any(d.drug_class in AV_NODE_SENSITIVE_DRUG_CLASSES for d in drugs)
+    all_conc_runs = np.zeros((len(drugs), n_realizations, n_timepoints))  # bkz. SimulationResult.all_conc_runs
 
     for i in range(n_realizations):
         ce_hr_list, ce_sbp_list, ec50_list, emax_hr_list, emax_sbp_list = [], [], [], [], []
@@ -441,7 +525,14 @@ def run_polypharmacy_simulation_loewe(patient: Patient, drugs: list[Drug],
             ke = organ_function_adjusted_ke(
                 drug.ke_mean, patient.renal_function, patient.hepatic_function,
                 drug.renal_clearance_fraction, drug.hepatic_clearance_fraction,
-            ) * rng.lognormal(mean=0, sigma=ke_variation_sigma)
+            )
+            # PK-seviyeli ilaç-ilaç etkileşimi -- run_polypharmacy_simulation()'daki
+            # BİREBİR AYNI blok (bkz. pk.py > pk_interaction_adjusted_ke). drug_keys/
+            # pk_interaction_matrix verilmediyse (varsayılan None) hiçbir şey değişmez.
+            if drug_keys is not None and pk_interaction_matrix:
+                active_perpetrators = [key for i, key in enumerate(drug_keys) if i != d_idx]
+                ke = pk_interaction_adjusted_ke(ke, drug_keys[d_idx], active_perpetrators, pk_interaction_matrix)
+            ke = ke * rng.lognormal(mean=0, sigma=ke_variation_sigma)
 
             conc = get_plasma_concentration(drug, t, patient.weight_kg, ke)
             ce_hr = effect_compartment_concentration(conc, drug.keo_hr, t) if drug.keo_hr is not None else conc
@@ -456,11 +547,16 @@ def run_polypharmacy_simulation_loewe(patient: Patient, drugs: list[Drug],
             emax_hr_list.append(electrolyte_adjusted_emax_hr(drug.emax_hr, drug.drug_class, patient.potassium_mEqL))
             emax_sbp_list.append(electrolyte_adjusted_emax_sbp(drug.emax_sbp, drug.drug_class, patient.calcium_mgdL))
 
+            all_conc_runs[d_idx, i] = conc
             if d_idx == 0:
                 conc_runs[i] = conc
 
-        hr_delta = loewe_combined_effect(ce_hr_list, ec50_list, emax_hr_list)
-        sbp_delta = loewe_combined_effect(ce_sbp_list, ec50_list, emax_sbp_list)
+        # bkz. pd.py > grouped_loewe_combined_effect (Şüphe D / ADR-4) --
+        # aynı-yönlü ilaçlarda loewe_combined_effect() ile SAYISAL OLARAK
+        # BİREBİR AYNI (tek grup), zıt yönlü kombinasyonlarda artık
+        # ValueError yerine gruplama+fark ile tanımlı bir sonuç üretir.
+        hr_delta = grouped_loewe_combined_effect(ce_hr_list, ec50_list, emax_hr_list)
+        sbp_delta = grouped_loewe_combined_effect(ce_sbp_list, ec50_list, emax_sbp_list)
 
         hr = patient.baseline_hr - hr_delta
         sbp = patient.baseline_sbp - sbp_delta
@@ -469,12 +565,25 @@ def run_polypharmacy_simulation_loewe(patient: Patient, drugs: list[Drug],
         sbp += rng.normal(0, measurement_noise_sbp, size=t.shape)
 
         hr = np.clip(hr, 0, None)
-        hr = apply_discrete_av_block(hr, patient, any_av_sensitive_drug)
+        # Şüphe E / ADR-3 fix: her AV-duyarlı ilacın İZOLE hr_fraction'ı --
+        # Loewe kombinasyonu ilaç-başına ayrıştırılabilir olmadığından
+        # (bisection ortak çözülüyor), izolasyon emax_effect()'in KENDİSİYLE
+        # (sensitivity=1.0 -- ec50_list[d] zaten sensitivity/EC50 ile
+        # ölçeklenmiş) yeniden hesaplanıyor -- integrate_drug_with_circadapt.py
+        # > compute_drug_effect()'in tek-ilaç izolasyon mantığıyla TUTARLI.
+        av_sensitive_hr_fractions = [
+            (patient.baseline_hr - emax_hr_list[d_idx] * emax_effect(ce_hr_list[d_idx], ec50_list[d_idx], sensitivity=1.0))
+            / patient.baseline_hr
+            for d_idx, drug in enumerate(drugs)
+            if drug.drug_class in AV_NODE_SENSITIVE_DRUG_CLASSES
+        ]
+        hr = apply_discrete_av_block(hr, patient, av_sensitive_hr_fractions)
 
         hr_runs[i] = hr
         sbp_runs[i] = np.clip(sbp, 0, None)
 
-    return SimulationResult(t=t, hr_runs=hr_runs, sbp_runs=sbp_runs, conc_runs=conc_runs)
+    return SimulationResult(t=t, hr_runs=hr_runs, sbp_runs=sbp_runs, conc_runs=conc_runs,
+                             all_conc_runs=all_conc_runs)
 
 
 def build_interaction_matrix(drug_keys: list[str], interactions: list[dict]
@@ -701,6 +810,8 @@ def recommend_polypharmacy_dose_scale(patient: Patient, drugs: list[Drug],
                                        scale_min: float = 0.1, scale_max: float = 3.0,
                                        n_candidates: int = 20, n_realizations: int = 200,
                                        max_bradycardia_risk_pct: float = 5.0,
+                                       drug_keys: list[str] | None = None,
+                                       pk_interaction_matrix: dict[tuple[str, str], float] | None = None,
                                        **monte_carlo_kwargs) -> dict:
     """
     3+ ilaçlı bir kombinasyon için doz önerisi -- recommend_dose()'un
@@ -731,6 +842,11 @@ def recommend_polypharmacy_dose_scale(patient: Patient, drugs: list[Drug],
     arasında makul bir tarama penceresi açmaktan başka bir amaçları yok.
     Klinik bir doz tavanı/tabanı İDDİA ETMEZLER.
 
+    drug_keys / pk_interaction_matrix: run_polypharmacy_simulation_loewe()'ye
+        AYNEN geçirilir (bkz. ADR-2, N_DRUG_AUDIT.md Şüphe A) -- verilmezse
+        (varsayılan None) PK-seviyeli ilaç etkileşimi bu doz taramasında
+        HESABA KATILMAZ (mevcut davranış, regresyon yok).
+
     Dönüş: {"scale": ..., "adjusted_doses": {drug.display_name: mg, ...},
     "stats": ..., "is_safe": ..., "reasoning": ..., "candidates": [...]}
     -- her adayda TÜM ilaçların ayarlanmış dozu candidates içinde saklanır.
@@ -748,6 +864,7 @@ def recommend_polypharmacy_dose_scale(patient: Patient, drugs: list[Drug],
             for drug in drugs
         ]
         result = run_polypharmacy_simulation_loewe(patient, scaled_drugs, n_realizations=n_realizations,
+                                                     drug_keys=drug_keys, pk_interaction_matrix=pk_interaction_matrix,
                                                      **monte_carlo_kwargs)
         candidates.append((float(scale), scaled_drugs, summarize(result)))
 
