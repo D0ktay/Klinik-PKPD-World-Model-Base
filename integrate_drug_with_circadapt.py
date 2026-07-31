@@ -435,6 +435,107 @@ def run_with_multiple_drugs(patient, drugs, drug_effects):
     return model
 
 
+# ADIM 4.1 -- CircAdapt parametre-başına ÖLÇÜLMÜŞ (varsayılmamış) güvenli
+# aralıklar. Yöntem, mevcut AV_BLOCK_THRESHOLD_MULTIPLIER (c_tau_av1) ile
+# AYNI: `scripts/circadapt_parameter_crash_thresholds.py` (yukarı yönlü) ve
+# `scripts/circadapt_parameter_crash_thresholds_downward.py` (aşağı yönlü,
+# parametreyi sıfıra yaklaştıran) ile hasta_a baseline'ından tek-parametre
+# izole sweep -- bkz. CALIBRATION_REPORT.md §9, N_DRUG_AUDIT.md Şüphe F.
+#
+# ÖNEMLİ BULGU: General.t_cycle (nabız -- HER ilaç, sınıfından bağımsız,
+# bunu etkiler) diğer parametrelerden ÇOK DAHA KIRILGAN çıktı -- 3.0x'te
+# çöküyor (c_tau_av1'in 7.0x'i, Sf_act'in 100x'i ile karşılaştırıldığında).
+# Bugüne kadar SADECE c_tau_av1 (AV blok) için ön-kontrol vardı; t_cycle
+# için HİÇ yoktu -- yani güçlü negatif kronotropların N=2-3 kombinasyonu
+# CircAdapt'i ön-kontrolsüz ÇÖKERTEBİLİRDİ (bkz. run_polypharmacy_comparison).
+#
+# (düşük, yüksek) -- ölçülen ilk çöküşün biraz İÇİNDE bir güvenlik payı
+# (c_tau_av1'in kendi payı: 5x stabil / 7x çöküş -> eşik 3.0 -- AYNI oranlı
+# temkinlilik burada da uygulandı).
+T_CYCLE_MULTIPLIER_SAFE_RANGE = (0.20, 2.5)      # ölçülen çöküş: <=0.15x, >=3.0x
+SF_ACT_MULTIPLIER_SAFE_RANGE = (0.12, 40.0)      # ölçülen çöküş: <=0.10x, >=100.0x
+# ArtVen.p0[0]: 0.01x-500x arası TAMAMEN test edildi, hiç çökmedi -- bu
+# "sonsuz güvenli" ANLAMINA GELMEZ, sadece test edilen aralıkta çökmediği
+# anlamına gelir. Sınır yine de konuyor (ölçülmemiş bölgede sessizce
+# davranmamak için), test edilen en uç noktalarda.
+ARTVEN_P0_MULTIPLIER_SAFE_RANGE = (0.01, 500.0)
+
+
+def cumulative_parameter_multipliers(patient, drugs, drug_effects) -> dict:
+    """
+    `apply_patient_electrolytes_to_circadapt()` / `apply_comorbidity_to_circadapt()`
+    / `apply_drug_effect_to_circadapt()` ÇAĞRILMADAN ÖNCE, bu çağrıların
+    CircAdapt'e üreteceği KÜMÜLATİF çarpanları -- MODELE HİÇ DOKUNMADAN, saf
+    hesap olarak -- TÜM hedef parametreler için üretir. `cumulative_av_
+    conduction_multiplier()`'ın (SADECE c_tau_av1) genelleştirilmiş hâli --
+    ADIM 0'daki AV-blok ön-kontrol desenini `General.t_cycle`, `Patch.Sf_act`,
+    `ArtVen.p0[0]` için de tekrarlar (bkz. N_DRUG_AUDIT.md Şüphe F, ADIM 4.1).
+
+    drugs/drug_effects: AYNI SIRADA eşleşen listeler (bkz.
+    cumulative_av_conduction_multiplier).
+
+    Dönüş: {"t_cycle": ..., "Sf_act": ..., "ArtVen.p0": ..., "c_tau_av1": ...}
+    -- her biri, o parametrenin CircAdapt'e uygulanacak KÜMÜLATİF çarpanı
+    (1.0 = değişim yok).
+    """
+    t_cycle_multiplier = 1.0
+    sf_act_multiplier = 1.0
+    artven_p0_multiplier = 1.0
+    c_tau_av1_multiplier = potassium_av_conduction_factor(patient.potassium_mEqL)
+
+    if patient.comorbidity == "heart_failure":
+        sf_act_multiplier *= HEART_FAILURE_CONTRACTILITY_FACTOR
+    elif patient.comorbidity == "hypertension":
+        artven_p0_multiplier *= HYPERTENSION_RESISTANCE_FACTOR
+
+    sf_act_multiplier *= calcium_contractility_factor(patient.calcium_mgdL)
+
+    for drug, effect in zip(drugs, drug_effects):
+        drug_class = drug.drug_class or "beta_blocker"
+        hr_fraction = max(effect["hr_drug"] / patient.baseline_hr, 1e-6)
+        sbp_fraction = max(effect["sbp_drug"] / patient.baseline_sbp, 1e-6)
+
+        # t_cycle -- apply_drug_effect_to_circadapt() İÇİNDE HER ilaç için
+        # koşulsuz uygulanıyor (drug_class'tan bağımsız), bu yüzden burada da
+        # koşulsuz.
+        t_cycle_multiplier /= hr_fraction
+
+        if drug_class in AV_NODE_SENSITIVE_DRUG_CLASSES:
+            sf_act_multiplier *= sbp_fraction
+            c_tau_av1_multiplier /= hr_fraction
+        elif drug_class == "vasodilator":
+            artven_p0_multiplier *= sbp_fraction
+
+    return {
+        "t_cycle": t_cycle_multiplier,
+        "Sf_act": sf_act_multiplier,
+        "ArtVen.p0": artven_p0_multiplier,
+        "c_tau_av1": c_tau_av1_multiplier,
+    }
+
+
+def circadapt_instability_risk(multipliers: dict) -> str | None:
+    """
+    `cumulative_parameter_multipliers()`'ın döndürdüğü çarpanlardan HERHANGİ
+    biri ölçülmüş güvenli aralığın dışındaysa, SORUMLU parametrenin adını
+    döndürür (öncelik sırası: c_tau_av1 > t_cycle > Sf_act > ArtVen.p0 --
+    c_tau_av1 klinik olarak en anlamlı yorumu -- AV blok -- taşıdığı için
+    önce kontrol edilir). Hiçbiri aşılmadıysa None.
+    """
+    if multipliers["c_tau_av1"] >= AV_BLOCK_THRESHOLD_MULTIPLIER:
+        return "c_tau_av1"
+    lo, hi = T_CYCLE_MULTIPLIER_SAFE_RANGE
+    if not (lo <= multipliers["t_cycle"] <= hi):
+        return "t_cycle"
+    lo, hi = SF_ACT_MULTIPLIER_SAFE_RANGE
+    if not (lo <= multipliers["Sf_act"] <= hi):
+        return "Sf_act"
+    lo, hi = ARTVEN_P0_MULTIPLIER_SAFE_RANGE
+    if not (lo <= multipliers["ArtVen.p0"] <= hi):
+        return "ArtVen.p0"
+    return None
+
+
 def run_polypharmacy_comparison(patient, drugs):
     """PK/PD + CircAdapt zincirini BİRDEN FAZLA ilaç için uçtan uca çalıştırır."""
     drug_effects = [compute_drug_effect(patient, drug) for drug in drugs]
@@ -444,35 +545,52 @@ def run_polypharmacy_comparison(patient, drugs):
     hr_base = 60.0 / baseline_model["General"]["t_cycle"]
     tau_av_base_ms = float(baseline_model["Timings"]["tau_av"][0]) * 1000
 
-    # Discrete AV blok (Gap #3) ön-kontrolü -- bkz. cumulative_av_conduction_
-    # multiplier() docstring'i. CircAdapt'i çökertecek bir çarpanla ÇAĞIRMADAN
-    # ÖNCE tespit ediyoruz.
-    av_block_triggered = (
-        patient.known_av_block_degree == "third"
-        or cumulative_av_conduction_multiplier(patient, drugs, drug_effects) >= AV_BLOCK_THRESHOLD_MULTIPLIER
-    )
+    # Genelleştirilmiş ön-kontrol (ADIM 4.1/4.2, N_DRUG_AUDIT.md Şüphe F) --
+    # SADECE c_tau_av1 (AV blok) yerine, CircAdapt'e uygulanacak TÜM hedef
+    # parametrelerin (t_cycle, Sf_act, ArtVen.p0, c_tau_av1) kümülatif
+    # çarpanını, MODELE HİÇ DOKUNMADAN, ÖNCEDEN hesaplıyoruz. Eskiden SADECE
+    # c_tau_av1 kontrol ediliyordu -- ama t_cycle çok daha kırılgan çıktı
+    # (3.0x'te çöküyor) ve HİÇ ön-kontrolü yoktu, yani güçlü negatif
+    # kronotropların N=2-3 kombinasyonu CircAdapt'i sessizce çökertebilirdi.
+    multipliers = cumulative_parameter_multipliers(patient, drugs, drug_effects)
+    unstable_parameter = circadapt_instability_risk(multipliers)
+    av_block_triggered = patient.known_av_block_degree == "third" or unstable_parameter == "c_tau_av1"
 
-    if av_block_triggered:
+    if av_block_triggered or unstable_parameter is not None:
         # CircAdapt'e HİÇ dokunulmuyor (çökeceği için) -- "ilaçlı/kombine"
         # durum için gerçek bir hemodinamik iz (p/v) HESAPLANAMIYOR. Baseline
         # eğrilerini burada yeniden kullanmak YANILTICI olurdu (av_block_
-        # triggered flag'i kontrol edilmeden okunursa, "ilaçlı durum baseline'la
-        # aynı" gibi yanlış bir izlenim verir) -- bu yüzden np.nan ile dolu,
-        # baseline'la AYNI ŞEKİLLİ (ama baseline'dan bağımsız, veri taşımayan)
-        # diziler kullanılıyor. Çağıran (bkz. streamlit_app.py), av_block_
-        # triggered=True olduğunda bu eğrileri ÇİZMEMELİ/`.max()`/`.min()`
-        # ÇAĞIRMAMALI -- asıl sinyal hr_drug_model'in ESCAPE_RHYTHM_HR'ye
-        # sabitlenmesi. tau_av_drug_ms de HESAPLANAMAZ (model hiç
-        # çalıştırılmadı) -- None.
+        # triggered/instability_triggered flag'i kontrol edilmeden okunursa,
+        # "ilaçlı durum baseline'la aynı" gibi yanlış bir izlenim verir) --
+        # bu yüzden np.nan ile dolu, baseline'la AYNI ŞEKİLLİ (ama
+        # baseline'dan bağımsız, veri taşımayan) diziler kullanılıyor.
+        # Çağıran (bkz. streamlit_app.py), bu flag'lerden biri True olduğunda
+        # bu eğrileri ÇİZMEMELİ/`.max()`/`.min()` ÇAĞIRMAMALI.
         nan_p_drug = np.full_like(p_base, np.nan)
         nan_v_drug = np.full_like(v_base, np.nan)
+        # AV blok (c_tau_av1) -- klinik olarak anlamlı bir kaçış ritmi VAR
+        # (bkz. AV_BLOCK_ESCAPE_RHYTHM_HR docstring'i). Diğer parametrelerin
+        # (t_cycle/Sf_act/ArtVen.p0) çöküşü için böyle bir klinik karşılık
+        # YOK -- bu durumda en iyi elimizdeki tahmin, PK/PD zincirinin
+        # (CircAdapt'siz) hesapladığı hr_drug'ların BİRLEŞİK (additive)
+        # toplamı; bu SADECE istatistiksel bir tahmin olduğu AÇIKÇA
+        # işaretleniyor (instability_triggered=True, unstable_parameter).
+        if av_block_triggered:
+            hr_drug_model = AV_BLOCK_ESCAPE_RHYTHM_HR
+        else:
+            hr_drug_model = patient.baseline_hr - sum(
+                patient.baseline_hr - effect["hr_drug"] for effect in drug_effects
+            )
         return {
             "drug_effects": drug_effects,
             "t_base": t_base, "p_base": p_base, "v_base": v_base,
             "t_drug": t_base, "p_drug": nan_p_drug, "v_drug": nan_v_drug,
-            "hr_base": hr_base, "hr_drug_model": AV_BLOCK_ESCAPE_RHYTHM_HR,
+            "hr_base": hr_base, "hr_drug_model": hr_drug_model,
             "tau_av_base_ms": tau_av_base_ms, "tau_av_drug_ms": None,
-            "av_block_triggered": True,
+            "av_block_triggered": av_block_triggered,
+            "instability_triggered": unstable_parameter is not None,
+            "unstable_parameter": unstable_parameter,
+            "parameter_multipliers": multipliers,
         }
 
     combo_model = run_with_multiple_drugs(patient, drugs, drug_effects)
@@ -491,6 +609,9 @@ def run_polypharmacy_comparison(patient, drugs):
         "tau_av_base_ms": tau_av_base_ms,
         "tau_av_drug_ms": float(combo_model["Timings"]["tau_av"][0]) * 1000,
         "av_block_triggered": False,
+        "instability_triggered": False,
+        "unstable_parameter": None,
+        "parameter_multipliers": multipliers,
     }
 
 

@@ -1,0 +1,254 @@
+{
+  "Patch.Sf_act": {
+    "1.0": {
+      "ok": true,
+      "error": null
+    },
+    "1.5": {
+      "ok": true,
+      "error": null
+    },
+    "2.0": {
+      "ok": true,
+      "error": null
+    },
+    "2.25": {
+      "ok": true,
+      "error": null
+    },
+    "2.5": {
+      "ok": true,
+      "error": null
+    },
+    "2.75": {
+      "ok": true,
+      "error": null
+    },
+    "3.0": {
+      "ok": true,
+      "error": null
+    },
+    "5.0": {
+      "ok": true,
+      "error": null
+    },
+    "7.0": {
+      "ok": true,
+      "error": null
+    },
+    "9.0": {
+      "ok": true,
+      "error": null
+    },
+    "15.0": {
+      "ok": true,
+      "error": null
+    },
+    "50.0": {
+      "ok": true,
+      "error": null
+    },
+    "100.0": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "200.0": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "500.0": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "first_crash_multiplier": 100.0
+  },
+  "ArtVen.p0[0]": {
+    "1.0": {
+      "ok": true,
+      "error": null
+    },
+    "1.5": {
+      "ok": true,
+      "error": null
+    },
+    "2.0": {
+      "ok": true,
+      "error": null
+    },
+    "2.25": {
+      "ok": true,
+      "error": null
+    },
+    "2.5": {
+      "ok": true,
+      "error": null
+    },
+    "2.75": {
+      "ok": true,
+      "error": null
+    },
+    "3.0": {
+      "ok": true,
+      "error": null
+    },
+    "5.0": {
+      "ok": true,
+      "error": null
+    },
+    "7.0": {
+      "ok": true,
+      "error": null
+    },
+    "9.0": {
+      "ok": true,
+      "error": null
+    },
+    "15.0": {
+      "ok": true,
+      "error": null
+    },
+    "50.0": {
+      "ok": true,
+      "error": null
+    },
+    "100.0": {
+      "ok": true,
+      "error": null
+    },
+    "200.0": {
+      "ok": true,
+      "error": null
+    },
+    "500.0": {
+      "ok": true,
+      "error": null
+    },
+    "first_crash_multiplier": null
+  },
+  "General.t_cycle": {
+    "1.0": {
+      "ok": true,
+      "error": null
+    },
+    "1.5": {
+      "ok": true,
+      "error": null
+    },
+    "2.0": {
+      "ok": true,
+      "error": null
+    },
+    "2.25": {
+      "ok": true,
+      "error": null
+    },
+    "2.5": {
+      "ok": true,
+      "error": null
+    },
+    "2.75": {
+      "ok": true,
+      "error": null
+    },
+    "3.0": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "5.0": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "7.0": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "9.0": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "15.0": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "50.0": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "100.0": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "200.0": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "500.0": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "first_crash_multiplier": 3.0
+  },
+  "Timings.c_tau_av1": {
+    "1.0": {
+      "ok": true,
+      "error": null
+    },
+    "1.5": {
+      "ok": true,
+      "error": null
+    },
+    "2.0": {
+      "ok": true,
+      "error": null
+    },
+    "2.25": {
+      "ok": true,
+      "error": null
+    },
+    "2.5": {
+      "ok": true,
+      "error": null
+    },
+    "2.75": {
+      "ok": true,
+      "error": null
+    },
+    "3.0": {
+      "ok": true,
+      "error": null
+    },
+    "5.0": {
+      "ok": true,
+      "error": null
+    },
+    "7.0": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "9.0": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "15.0": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "50.0": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "100.0": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "200.0": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "500.0": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "first_crash_multiplier": 7.0
+  }
+}

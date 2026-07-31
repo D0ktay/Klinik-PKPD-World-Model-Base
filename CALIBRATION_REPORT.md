@@ -528,13 +528,18 @@ hale geliyor, ayrık bir durum değişikliği gerekiyor.
 - `av_conduction_cumulative_multiplier()` -- CircAdapt'in `c_tau_av1`
   üzerinde biriktirdiği kümülatif çarpanın (elektrolit `k_factor` × her
   AV-duyarlı ilacın `1/hr_fraction` terimi) istatistiksel motordaki
-  KARŞILIĞI. **Yaklaşıklık notu:** istatistiksel motor (additive model),
-  CircAdapt'in ilaç-başına ÇARPIMSAL birikimini (`run_with_multiple_drugs`)
-  birebir tekrarlamıyor -- bunun yerine additive motorun ZATEN ürettiği
-  BİRLEŞİK `hr_fraction`'ı aynı formüle sokuyor. Bu, iki farklı birleştirme
-  mimarisi arasında (additive vs. CircAdapt'in çarpımsal birikimi) tam bir
-  eşdeğerlik iddia ETMİYOR, sadece AYNI fiziksel yönü aynı formülle
-  yaklaşık olarak yeniden üretiyor.
+  KARŞILIĞI. **GÜNCELLEME (N-ilaç genellemesi, ADIM 3.5 / ADR-3, bkz.
+  N_DRUG_AUDIT.md Şüphe E ve RESEARCH_N_DRUG.md):** bu fonksiyon ESKİDEN
+  (bu güncellemeden önce) SADECE bir YAKLAŞIKLIKTI -- additive motorun
+  ZATEN toplamış olduğu TEK bir birleşik `hr_fraction`'ı k_factor'a
+  bölüyordu, CircAdapt'in ilaç-başına SIRAYLA çarpımsal birikimini
+  (`run_with_multiple_drugs`) TEKRARLAMIYORDU. İzole ölçüm bu sapmanın
+  N ile hızla büyüdüğünü gösterdi: N=2'de %1.7, **N=5'te %52**. Artık
+  fonksiyon HER AV-duyarlı ilacın İZOLE hr_fraction'ını AYRI AYRI, SIRAYLA
+  çarpımsal olarak biriktiriyor -- `integrate_drug_with_circadapt.py >
+  cumulative_av_conduction_multiplier()` İLE BİREBİR AYNI matematik. İki
+  motor artık AYNI formülü paylaşıyor -- sapma ölçülüp belgelenmekle
+  kalmadı, GİDERİLDİ.
 - `discrete_av_block_mask()` -- eşik aşıldığı İLK noktadan İTİBAREN
   (mandal/latch, titreşen bir maske DEĞİL) True döner. Gerekçe: AV bloğu
   klinikte ilaç konsantrasyonu düştükçe anlık "açılıp kapanmaz" -- kademeli
@@ -621,3 +626,68 @@ tetiklenebiliyor -- bu ayrım SADECE CircAdapt sekmesindeki mesaj için
 geçerli. Bu, ayrı bir küçük takip görevi (slider üst sınırlarını
 genişletmek ya da eşiği yeniden kalibre etmek) olarak kalıyor, bu
 turun kapsamına dahil edilmedi.
+
+---
+
+## 10. N-İlaç Genellemesi — CircAdapt Parametre-Başına Çöküş Eşikleri (ADIM 4.1)
+
+`N_DRUG_AUDIT.md` Şüphe F: §8'deki 5x-7x çöküş eşiği SADECE
+`Timings.c_tau_av1` için ölçülmüştü. N ilaçta `Patch.Sf_act`
+(kontraktilite), `ArtVen.p0[0]` (sistemik direnç) ve `General.t_cycle`
+(kalp siklus süresi -- nabız) de çarpımsal biriktiği için
+(`apply_drug_effect_to_circadapt`), bu üçünün de izole çöküş eşiği
+ölçüldü: `scripts/circadapt_parameter_crash_thresholds.py` (yukarı yönlü,
+parametreyi büyüten çarpanlar: 1x-500x) ve
+`scripts/circadapt_parameter_crash_thresholds_downward.py` (aşağı yönlü,
+parametreyi sıfıra yaklaştıran çarpanlar: 1x-0.01x), hasta_a baseline
+modelinden tek-parametre izolasyonuyla.
+
+**Ölçülen sonuçlar** (`logs/circadapt_parameter_crash_thresholds*.json`):
+
+| Parametre | Yukarı yönlü ilk çöküş | Aşağı yönlü ilk çöküş | Not |
+|---|---|---|---|
+| `Timings.c_tau_av1` | 7.0x (5.0x stabil) | test edilmedi (fizyolojik olarak ilgisiz -- hiçbir ilaç/elektrolit bu parametreyi azaltmıyor) | §8'deki bilinen sonucu doğruladı (kontrol ölçümü) |
+| `General.t_cycle` | **3.0x** (2.8x stabil) | **0.15x** (`ModelNotStable`, 0.25x stabil) | **EN KIRILGAN parametre** -- ve HER ilaç (sınıfından bağımsız) bunu etkiliyor |
+| `Patch.Sf_act` | 100.0x (50.0x stabil) | 0.10x (0.15x stabil) | c_tau_av1'den çok daha dayanıklı |
+| `ArtVen.p0[0]` | test edilen aralıkta (500x'e kadar) hiç çökmedi | test edilen aralıkta (0.01x'e kadar) hiç çökmedi | en dayanıklı -- ama "sonsuz güvenli" değil, sadece test edilen aralıkta çökmedi |
+
+**En önemli bulgu:** `General.t_cycle`, `c_tau_av1`'den (7.0x) çok daha
+kırılgan (3.0x) -- ve bugüne kadar SADECE `c_tau_av1` için bir ön-kontrol
+vardı, `t_cycle` için HİÇ yoktu. Bu, güçlü negatif kronotropların N=2-3
+kombinasyonunun (her ilaç `t_cycle`'ı `1/hr_fraction` ile çarpımsal
+büyüttüğü için) CircAdapt'i ön-kontrolsüz ÇÖKERTEBİLECEĞİ anlamına
+geliyordu -- pratikte bu projenin mevcut ilaç dozlarında (bkz.
+tests/test_no_regression_n_drug.py, N=1/2 golden senaryoları) eşiğe
+yaklaşılmıyor, ama N≥3 güçlü doz kombinasyonlarında risk gerçek.
+
+**Düzeltme (ADIM 4.2):**
+`integrate_drug_with_circadapt.cumulative_parameter_multipliers()` --
+`cumulative_av_conduction_multiplier()`'ın (SADECE c_tau_av1)
+genelleştirilmiş hâli -- artık `t_cycle`/`Sf_act`/`ArtVen.p0`/`c_tau_av1`
+için TÜMÜ için CircAdapt'e HİÇ dokunmadan kümülatif çarpanı hesaplıyor.
+`circadapt_instability_risk()` bunlardan HERHANGİ biri ölçülmüş güvenli
+aralığın (yukarıdaki tablonun bir güvenlik payı altındaki karşılığı --
+`T_CYCLE_MULTIPLIER_SAFE_RANGE=(0.20, 2.5)`,
+`SF_ACT_MULTIPLIER_SAFE_RANGE=(0.12, 40.0)`,
+`ARTVEN_P0_MULTIPLIER_SAFE_RANGE=(0.01, 500.0)`) dışına çıkarsa,
+`run_polypharmacy_comparison()` CircAdapt'i HİÇ çağırmadan, temiz bir
+`instability_triggered=True` sonucu döndürür (AV blok deseninin
+genelleştirilmiş hali). c_tau_av1 (AV blok) klinik olarak en anlamlı
+yorumu taşıdığı için öncelikli kontrol ediliyor; diğer üç parametrenin
+çöküşü için klinik bir "kaçış ritmi" karşılığı yok -- bu durumda
+`hr_drug_model`, PK/PD zincirinin (CircAdapt'siz) additive tahminine
+düşer, `unstable_parameter` alanı HANGİ parametrenin sorumlu olduğunu
+açıkça taşır.
+
+**Güvenlik payı metodolojisi:** §8'deki `AV_BLOCK_THRESHOLD_MULTIPLIER=3.0`
+(ölçülen 5x-7x çöküşün altında) ile AYNI mantık -- ölçülen ilk çöküşün
+BİR MİKTAR içinde bir eşik, "çöküşün hemen altı" güvenli sayılmadı (hasta
+varyasyonu payı). Bu eşikler klinik bir kesinlik iddiası taşımaz, sadece
+CircAdapt'in SAYISAL kararlılığını korur.
+
+**Test kapsamı:** `tests/test_n_drug_circadapt.py` -- permütasyon
+değişmezliği (Şüphe G, gerçek CircAdapt ile N=4, 8 permütasyon),
+N=1-6 için "hiç çökme yok" (`@pytest.mark.slow`, yine de CI'da çalışır),
+`cumulative_parameter_multipliers`/`circadapt_instability_risk`'in saf
+mantık testleri, ve `t_cycle` eşiğinin CircAdapt'i HİÇ ÇAĞIRMADAN devreye
+girdiğini doğrulayan bir spy testi.

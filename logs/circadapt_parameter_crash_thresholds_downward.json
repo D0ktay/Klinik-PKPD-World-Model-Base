@@ -1,0 +1,131 @@
+{
+  "Patch.Sf_act": {
+    "1.0": {
+      "ok": true,
+      "error": null
+    },
+    "0.7": {
+      "ok": true,
+      "error": null
+    },
+    "0.5": {
+      "ok": true,
+      "error": null
+    },
+    "0.35": {
+      "ok": true,
+      "error": null
+    },
+    "0.25": {
+      "ok": true,
+      "error": null
+    },
+    "0.15": {
+      "ok": true,
+      "error": null
+    },
+    "0.1": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "0.05": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "0.02": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "0.01": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "first_crash_multiplier": 0.1
+  },
+  "ArtVen.p0[0]": {
+    "1.0": {
+      "ok": true,
+      "error": null
+    },
+    "0.7": {
+      "ok": true,
+      "error": null
+    },
+    "0.5": {
+      "ok": true,
+      "error": null
+    },
+    "0.35": {
+      "ok": true,
+      "error": null
+    },
+    "0.25": {
+      "ok": true,
+      "error": null
+    },
+    "0.15": {
+      "ok": true,
+      "error": null
+    },
+    "0.1": {
+      "ok": true,
+      "error": null
+    },
+    "0.05": {
+      "ok": true,
+      "error": null
+    },
+    "0.02": {
+      "ok": true,
+      "error": null
+    },
+    "0.01": {
+      "ok": true,
+      "error": null
+    },
+    "first_crash_multiplier": null
+  },
+  "General.t_cycle": {
+    "1.0": {
+      "ok": true,
+      "error": null
+    },
+    "0.7": {
+      "ok": true,
+      "error": null
+    },
+    "0.5": {
+      "ok": true,
+      "error": null
+    },
+    "0.35": {
+      "ok": true,
+      "error": null
+    },
+    "0.25": {
+      "ok": true,
+      "error": null
+    },
+    "0.15": {
+      "ok": false,
+      "error": "ModelNotStable"
+    },
+    "0.1": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "0.05": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "0.02": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "0.01": {
+      "ok": false,
+      "error": "ModelCrashed"
+    },
+    "first_crash_multiplier": 0.15
+  }
+}
