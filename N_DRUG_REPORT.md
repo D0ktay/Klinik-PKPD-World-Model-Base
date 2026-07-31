@@ -106,10 +106,46 @@ sonunda doğrulandı, `pytest -q`).
 - Grid-scan (doz tarama) maliyeti N=8'de ~35-40 saniyeye kadar
   uzayabilir (ölçülen N=2-5 eğiliminin ekstrapolasyonu) — Streamlit
   spinner'ı bunu gösteriyor ama optimize edilmedi.
-- Streamlit Cloud'daki canlı davranış (Windows-dışı platform, font/yol
-  farklılıkları) bu oturumda TEST EDİLMEDİ — sadece yerel ortamda
-  (Windows, gerçek tarayıcı) doğrulandı. Deploy sonrası ek bir doğrulama
-  turu önerilir.
+- ~~Streamlit Cloud'daki canlı davranış test edilmedi~~ -- **artık test
+  edildi, bkz. aşağıdaki "Deploy" bölümü.**
 
 "Her şey mükemmel" değildir — yukarıdaki sınırlar bilinçli, ölçülmüş ve
 belgelenmiş kararlardır.
+
+---
+
+## Deploy
+
+- **Push edilen commit:** `927f7cf12a0880d77c0616291fcc6e50e6801b3b` (ADIM 7
+  sonu, `origin/master`) — `git push origin master` ile
+  `github.com/D0ktay/Klinik-PKPD-World-Model-Base` reposuna gönderildi,
+  `d31cbb0..927f7cf` (7 commit: baseline + ADIM 2-7).
+- **Canlı URL:** https://klinik-pkpd-world-model-base-ahrm47cwvjar9cgogclrz9.streamlit.app/
+  (Streamlit Community Cloud, GitHub push'a otomatik bağlı -- ayrı bir
+  manuel "redeploy" tetiklemesi gerekmedi).
+- **Deploy tarihi/doğrulama:** 2026-07-31. Uygulama push sonrası
+  inaktivite nedeniyle "uykuda" bulundu ("Zzzz -- bu app inaktivite
+  nedeniyle uykuya daldı"), "Yes, get this app back up!" ile uyandırıldı
+  ve yeni commit'le başarıyla ayağa kalktı.
+- **N=3 doğrulaması (canlı, Playwright/Chromium):** Esmolol+Digoksin+
+  Dobutamin (karma yönlü) -- İlaç Seçimi (etkileşim tablosu "simetrik
+  (N≥3)" doğru gösterdi), Simülasyon (konsantrasyon grafiği, katkı
+  dökümü, karma-yön uyarısı) sorunsuz çalıştı. Konsol hatası yok.
+- **N=5 doğrulaması (canlı):** +Nikardipin+Sodyum Nitroprussid eklenerek
+  N=5'e çıkarıldı -- "N≥5" performans/tavan uyarısı doğru göründü,
+  konsantrasyon grafiğinde 5 ayrı eğri, katkı dökümünde 5 satır, doz
+  önerisi ("Önerilen en iyi doz: 20.0 mg") ve CircAdapt sekmesi (PV loop,
+  EF %65, CO 6.3 L/dk, tüm 5 ilaç listeli) doğru render oldu. Konsol
+  hatası yok (gözlenen birkaç "404" kaynak hatası Streamlit Cloud'un
+  kendi statik varlıklarına -- ör. favicon/analytics -- ait, uygulama
+  işlevselliğini etkilemedi).
+- **Bulunan/düzeltilen bir test-altyapısı detayı (uygulama kodu
+  DEĞİL):** Streamlit Community Cloud, uygulamayı üst sayfanın (Fork/
+  GitHub butonlu chrome) İÇİNDE ayrı bir iframe'de (`/~/+/` yolu)
+  render ediyor -- yerel `streamlit run` sunucusunda bu iframe sarmalayıcı
+  yok. Playwright betiklerinin doğru iframe'i hedeflemesi gerekti; bu
+  SADECE canlı doğrulama betiğini etkiledi, uygulamanın kendisinde bir
+  sorun değil.
+
+**Sonuç: canlı deploy, N=3 ve N=5 için yerel ortamdaki davranışla
+BİREBİR tutarlı çalışıyor.**
