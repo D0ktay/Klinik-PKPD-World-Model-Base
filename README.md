@@ -31,6 +31,7 @@ Uygulamayı doğrudan tarayıcıdan açmak için: https://klinik-pkpd-world-mode
 13. [Tüm formüller — referans](#13-tüm-formüller--referans)
 14. [Kurulum & çalıştırma](#14-kurulum--çalıştırma)
 15. [Proje yapısı](#15-proje-yapısı)
+16. [N-İlaç (Polifarmasi) Genellemesi](#16-n-ilaç-polifarmasi-genellemesi)
 
 ---
 
@@ -532,3 +533,67 @@ vivax_world_model_demo/
 │   └── test_clinical_validation.py   # Gerçek klinik veriyle karşılaştırma
 └── outputs/                 # Üretilen grafikler buraya kaydedilir
 ```
+
+---
+
+## 16. N-İlaç (Polifarmasi) Genellemesi
+
+Proje başlangıçta yalnızca N=1/N=2 ilaç için güvenilir çalışıyordu.
+Aşağıdaki, N=1..8 ilaç için genelleme çalışmasının özeti -- tam denetim
+(`N_DRUG_AUDIT.md`), literatür araştırması + mimari karar
+(`RESEARCH_N_DRUG.md`, ADR-1..6) ve nihai rapor (`N_DRUG_REPORT.md`)
+ayrı dosyalarda.
+
+### Seçilen kombinasyon yöntemi
+
+- **İstatistiksel motor (HR/SBP büyüklüğü):** Loewe additivity (doz-
+  eşdeğerliği, `pd.py > loewe_combined_effect`) -- literatürde N ilaca
+  en iyi genellenmiş, en düşük hesap maliyetli yöntem. `min(Emax)` tavanı
+  (en düşük tavanlı TEK ilacın kombinasyonun üst sınırını belirlemesi)
+  **kaldırılmadı** -- hiçbir literatür yöntemi (MuSyC dahil) bunu bu
+  proje için uygulanabilir şekilde kaldırmıyor (kalibrasyon verisi
+  eksikliği) -- bunun yerine kullanıcıya (Streamlit) hangi ilacın tavanı
+  belirlediği açıkça gösteriliyor.
+- **CircAdapt'e uygulanan parametre çarpanları (t_cycle/Sf_act/ArtVen.p0/
+  c_tau_av1):** ilaç-başına, sırayla çarpımsal birikim (Bliss
+  independence'ın "kalan fraksiyonların çarpımı" formülasyonuyla örtüşen,
+  QSP kardiyovasküler pratiğiyle uyumlu bir yaklaşım) -- N=4 ilaçla 24
+  permütasyonun tamamen sıra-bağımsız olduğu çalışma-zamanında doğrulandı.
+- **Zıt yönlü ilaçlar** (biri nabzı düşürür, biri artırır): literatürde
+  hiçbir standart yöntem yok -- proje kendi mühendislik kararını
+  uyguluyor (`pd.py > grouped_loewe_combined_effect`): ilaçlar Emax
+  işaretine göre gruplanır, her grup kendi içinde Loewe ile birleştirilir,
+  net sonuç gruplar arası (işaretli) toplamdır. Bu **literatürden gelen
+  bir yöntem değildir**, kod ve arayüzde açıkça böyle etiketlenir.
+
+### Düzeltilen kritik hatalar
+
+- **AV-blok formül sapması** (N=5'te ölçülen %52): istatistiksel motorun
+  AV-iletim çarpanı, CircAdapt'in gerçek ilaç-başına çarpımsal formülüyle
+  hizalandı (bkz. §5, `av_conduction_cumulative_multiplier`).
+- **PK-DDI kaybı N≥3'te**: `run_polypharmacy_simulation_loewe()`'ye
+  eksik olan `drug_keys`/`pk_interaction_matrix` parametreleri eklendi.
+- **t_cycle'ın hiç kontrol edilmemesi**: CircAdapt'in en kırılgan
+  parametresi (3.0x'te çöküyor, `Sf_act`'in 100x'i ve `ArtVen.p0`'ın
+  500x+'inden çok daha düşük) için genelleştirilmiş bir ön-kontrol
+  eklendi (`cumulative_parameter_multipliers`/`circadapt_instability_risk`).
+- **PD interaction teriminin asimetrisi**: N≥3'te simetrikleştirildi
+  (N=1/2 davranışı `symmetric_interaction_terms=False` varsayılanıyla
+  korunarak).
+
+### Bilinen sınırlar (dürüstçe)
+
+- `min(Emax)` tavanı N büyüdükçe daha sık bağlayıcı hale gelir -- bu
+  kaldırılmadı, sadece görünür kılındı.
+- Zıt yönlü kombinasyon birleştirme kuralı literatür kaynaklı değil.
+- İstatistiksel motorun Monte Carlo (rastgele örneklenmiş) yolu,
+  paylaşılan bir RNG akışı kullandığı için ilaç SEÇİM SIRASINDAN
+  bit-düzeyinde bağımsız DEĞİL (istatistiksel olarak aynı dağılım, ama
+  aynı dizi değil) -- CircAdapt tarafı (RNG'siz) tam sıra-bağımsız.
+- `ArtVen.p0[0]` için test edilen aralıkta (0.01x-500x) hiç çöküş
+  gözlenmedi -- bu "sonsuz güvenli" anlamına gelmez, sadece ölçülen
+  aralıkta güvenli demektir.
+
+Detaylar için: `N_DRUG_AUDIT.md` (denetim), `RESEARCH_N_DRUG.md`
+(literatür + ADR), `CALIBRATION_REPORT.md` §10 (CircAdapt eşikleri),
+`N_DRUG_REPORT.md` (nihai özet).

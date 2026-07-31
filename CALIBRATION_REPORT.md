@@ -691,3 +691,46 @@ N=1-6 için "hiç çökme yok" (`@pytest.mark.slow`, yine de CI'da çalışır),
 `cumulative_parameter_multipliers`/`circadapt_instability_risk`'in saf
 mantık testleri, ve `t_cycle` eşiğinin CircAdapt'i HİÇ ÇAĞIRMADAN devreye
 girdiğini doğrulayan bir spy testi.
+
+---
+
+## 11. N-İlaç İstatistiksel Motor -- Seçilen Yöntem ve Gerekçesi (Özet)
+
+Bu bölüm §8-10'un CircAdapt-tarafı bulgularını, istatistiksel motor
+tarafındaki mimari kararla (ADR) tamamlar. Tam literatür taraması ve
+karşılaştırma tablosu `RESEARCH_N_DRUG.md`'de; burada sadece SONUÇ ve
+KAYNAK özetleniyor.
+
+**Seçilen yöntem:** Loewe additivity (`pd.py > loewe_combined_effect`,
+Tallarida'nın N-ilaca genellenmiş izobol denklemi) -- literatürde N ilaca
+en iyi belgelenmiş, düşük hesap maliyetli yöntem. Alternatifler (MuSyC,
+ZIP, Chou-Talalay CI, 3. parti `synergy`/`SynergyFinder` paketleri)
+kalibrasyon verisi eksikliği ve/veya N>2 için olgunlaşmamış formülasyon
+nedeniyle REDDEDİLDİ (bkz. RESEARCH_N_DRUG.md §1, ADR-1).
+
+**`min(Emax)` tavanı KALDIRILMADI:** Grabovsky & Tallarida (2004, *J
+Pharmacol Exp Ther* 310(3):981-986) tam-agonist/kısmi-agonist için eğri
+izobol yöntemi bile bu tavanı kaldırmıyor -- literatürde bunu prensipli
+şekilde kaldıran bir yöntem yok. N büyüdükçe (en düşük-Emax'lı TEK ilaç
+kombinasyonun tavanını belirlediği için) bu kısıt DAHA SIK bağlayıcı hale
+gelir -- streamlit_app.py'de hangi ilacın tavanı belirlediği artık açıkça
+gösteriliyor (ADR-5).
+
+**Zıt yönlü ilaçlar için gruplama+fark** (`grouped_loewe_combined_effect`):
+literatürde (Loewe, Bliss, HSA, MuSyC, ZIP -- hepsi tarandı) zıt yönlü
+etkileri ele alan STANDART bir yöntem YOK. Bu, projenin kendi, kaynaksız
+mühendislik kararı -- kod ve arayüzde `⚠️` işaretiyle böyle belirtiliyor.
+
+**PD interaction teriminin simetrikleştirilmesi:** `run_polypharmacy_
+simulation()`'daki additive-interaction terimi eskiden `emax[a]`'yı
+kullanıp `emax[b]`'yi yok sayıyordu (YAML kaydının drug_a/drug_b sırasına
+bağlı, belgesiz bir asimetri). N≥3'te artık `(emax[a]+emax[b])/2`
+kullanılıyor (`symmetric_interaction_terms=True`, streamlit_app.py'de
+`len(drugs)>=3` için otomatik) -- N=1/2 golden-snapshot davranışı
+`False` varsayılanıyla korundu.
+
+**Kaynakça:** tam liste ve URL'ler `RESEARCH_N_DRUG.md` §5'te; öne çıkanlar:
+Foucquier ve ark. 2015 (Pharmacol Res Perspect); Grabovsky & Tallarida
+2004 (J Pharmacol Exp Ther); Wooten ve ark. 2021 (Nat Commun, MuSyC);
+Yadav ve ark. 2015 (Comput Struct Biotechnol J, ZIP); FDA/ICH M12 (2024,
+Drug Interaction Studies).
