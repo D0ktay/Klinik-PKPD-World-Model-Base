@@ -481,7 +481,6 @@ def cumulative_parameter_multipliers(patient, drugs, drug_effects) -> dict:
     t_cycle_multiplier = 1.0
     sf_act_multiplier = 1.0
     artven_p0_multiplier = 1.0
-    c_tau_av1_multiplier = potassium_av_conduction_factor(patient.potassium_mEqL)
 
     if patient.comorbidity == "heart_failure":
         sf_act_multiplier *= HEART_FAILURE_CONTRACTILITY_FACTOR
@@ -502,7 +501,6 @@ def cumulative_parameter_multipliers(patient, drugs, drug_effects) -> dict:
 
         if drug_class in AV_NODE_SENSITIVE_DRUG_CLASSES:
             sf_act_multiplier *= sbp_fraction
-            c_tau_av1_multiplier /= hr_fraction
         elif drug_class == "vasodilator":
             artven_p0_multiplier *= sbp_fraction
 
@@ -510,7 +508,9 @@ def cumulative_parameter_multipliers(patient, drugs, drug_effects) -> dict:
         "t_cycle": t_cycle_multiplier,
         "Sf_act": sf_act_multiplier,
         "ArtVen.p0": artven_p0_multiplier,
-        "c_tau_av1": c_tau_av1_multiplier,
+        # c_tau_av1 -- DRY: mevcut cumulative_av_conduction_multiplier()'ın
+        # (§8, AV blok) KENDİSİ çağrılıyor, mantık burada TEKRARLANMIYOR.
+        "c_tau_av1": cumulative_av_conduction_multiplier(patient, drugs, drug_effects),
     }
 
 
@@ -624,24 +624,32 @@ def run_comparison(patient, drug):
     hr_base = 60.0 / baseline_model["General"]["t_cycle"]
     tau_av_base_ms = float(baseline_model["Timings"]["tau_av"][0]) * 1000
 
-    av_block_triggered = (
-        patient.known_av_block_degree == "third"
-        or cumulative_av_conduction_multiplier(patient, [drug], [drug_effect]) >= AV_BLOCK_THRESHOLD_MULTIPLIER
-    )
+    # ADIM 4.2 ile TUTARLILIK: run_polypharmacy_comparison() genelleştirilmiş
+    # ön-kontrolü (t_cycle/Sf_act/ArtVen.p0/c_tau_av1) kullanıyor artık --
+    # tek-ilaç yolu (N=1) da AYNI kontrolden geçmeli, aksi halde N=1'de
+    # (örn. aşırı dozlu tek bir güçlü negatif kronotrop) t_cycle eşiği hâlâ
+    # kontrolsüz kalırdı.
+    multipliers = cumulative_parameter_multipliers(patient, [drug], [drug_effect])
+    unstable_parameter = circadapt_instability_risk(multipliers)
+    av_block_triggered = patient.known_av_block_degree == "third" or unstable_parameter == "c_tau_av1"
 
-    if av_block_triggered:
+    if av_block_triggered or unstable_parameter is not None:
         # bkz. run_polypharmacy_comparison'daki aynı dal -- gerçek bir p/v
         # izi hesaplanamadığı için np.nan ile dolu, baseline'dan bağımsız
         # diziler kullanılıyor (baseline verisini KOPYALAMAK yanıltıcı olurdu).
         nan_p_drug = np.full_like(p_base, np.nan)
         nan_v_drug = np.full_like(v_base, np.nan)
+        hr_drug_model = AV_BLOCK_ESCAPE_RHYTHM_HR if av_block_triggered else drug_effect["hr_drug"]
         return {
             "drug_effect": drug_effect,
             "t_base": t_base, "p_base": p_base, "v_base": v_base,
             "t_drug": t_base, "p_drug": nan_p_drug, "v_drug": nan_v_drug,
-            "hr_base": hr_base, "hr_drug_model": AV_BLOCK_ESCAPE_RHYTHM_HR,
+            "hr_base": hr_base, "hr_drug_model": hr_drug_model,
             "tau_av_base_ms": tau_av_base_ms, "tau_av_drug_ms": None,
-            "av_block_triggered": True,
+            "av_block_triggered": av_block_triggered,
+            "instability_triggered": unstable_parameter is not None,
+            "unstable_parameter": unstable_parameter,
+            "parameter_multipliers": multipliers,
         }
 
     drug_model = run_with_drug(patient, drug, drug_effect)
@@ -657,6 +665,9 @@ def run_comparison(patient, drug):
         "tau_av_base_ms": tau_av_base_ms,
         "tau_av_drug_ms": float(drug_model["Timings"]["tau_av"][0]) * 1000,
         "av_block_triggered": False,
+        "instability_triggered": False,
+        "unstable_parameter": None,
+        "parameter_multipliers": multipliers,
     }
 
 

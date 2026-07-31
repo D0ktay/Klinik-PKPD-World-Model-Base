@@ -68,6 +68,39 @@ from worldmodel.learned_dynamics.state_repr import (
 
 st.set_page_config(page_title="Medical Simulation", layout="wide")
 
+
+# ADIM 6 -- pahalı N-ilaç CircAdapt çağrılarını cache'leme. CircAdapt'in
+# ilaç-başına çarpımsal birikimi SIRADAN BAĞIMSIZ olduğu ÇALIŞMA-ZAMANINDA
+# doğrulandı (N_DRUG_AUDIT.md Şüphe G, tests/test_n_drug_circadapt.py) --
+# yani "aynı ilaç kümesi, farklı seçim sırası" aynı sonucu üretmeli VE aynı
+# cache girdisini kullanmalı. Kullanıcının SEÇTİĞİ sıra, cache anahtarı
+# olarak DOĞRUDAN kullanılmıyor -- ilaçlar deterministik bir anahtara göre
+# sıralanıp o sırayla hesaplanıyor (sonuç zaten aynı), sonra `drug_effects`
+# çağıranın orijinal sırasına GERİ eşleniyor.
+def _drug_sort_key(d):
+    return (d.display_name, round(d.dose_mg, 6), round(d.ec50, 8))
+
+
+@st.cache_data(show_spinner=False)
+def _cached_polypharmacy_comparison_sorted(patient, drugs_sorted):
+    return run_polypharmacy_comparison(patient, list(drugs_sorted))
+
+
+def cached_run_polypharmacy_comparison(patient, drugs):
+    order = sorted(range(len(drugs)), key=lambda i: _drug_sort_key(drugs[i]))
+    drugs_sorted = tuple(drugs[i] for i in order)
+    result = dict(_cached_polypharmacy_comparison_sorted(patient, drugs_sorted))
+    inverse = [0] * len(order)
+    for sorted_pos, original_idx in enumerate(order):
+        inverse[original_idx] = sorted_pos
+    result["drug_effects"] = [result["drug_effects"][inverse[i]] for i in range(len(drugs))]
+    return result
+
+
+@st.cache_data(show_spinner=False)
+def cached_run_comparison(patient, drug):
+    return run_comparison(patient, drug)
+
 st.markdown("""
 <style>
 /* Klinik görünüm: nötr tipografi, düz (gölgesiz) kart yüzeyleri, ölçülü renk paleti. */
@@ -660,6 +693,7 @@ with tab_registration:
 # --- Sekme 2: İlaç Seçimi ---
 with tab_drug:
     st.subheader("İlaç & Simülasyon Ayarları")
+    MAX_DRUGS = 8
     drug_keys = st.multiselect(
         "İlaç(lar)",
         options=list(all_drugs.keys()),
@@ -668,14 +702,25 @@ with tab_drug:
             f"[{DRUG_CLASS_LABELS.get(all_drugs[k].drug_class, all_drugs[k].drug_class)}]"
         ),
         default=[list(all_drugs.keys())[0]],
+        max_selections=MAX_DRUGS,
         help="Beta-bloker: nabzı/kontraktiliteyi düşürür. Vazodilatör: damar direncini "
              "düşürür (kontraktiliteye dokunmaz). Pozitif inotrop: kontraktiliteyi artırır. "
              "Birden fazla ilaç seçilirse POLİFARMASİ modu çalışır -- ilaçların BİRLİKTE "
-             "etkisi hem istatistiksel hem CircAdapt tarafında hesaplanır.",
+             "etkisi hem istatistiksel hem CircAdapt tarafında hesaplanır. "
+             f"En fazla {MAX_DRUGS} ilaç -- daha fazlası hem klinik olarak nadir hem de "
+             "hesaplama süresini (özellikle doz tarama panelinde) önemli ölçüde uzatır.",
     )
     if not drug_keys:
         st.warning("Devam etmek için en az bir ilaç seçin.")
         st.stop()
+    if len(drug_keys) >= 5:
+        st.info(
+            f"{len(drug_keys)} ilaç seçili -- N büyüdükçe (i) doz tarama panelinin süresi "
+            "kabaca doğrusal artar (bkz. CALIBRATION_REPORT.md, N=5'te ~25 saniye), "
+            "(ii) Loewe additivity'nin `min(Emax)` tavanına (en düşük tavanlı TEK ilacın "
+            "belirlediği üst sınır) ulaşma olasılığı artar -- bkz. aşağıdaki sonuç panelindeki "
+            "uyarılar."
+        )
 
     n_runs = st.slider("Monte Carlo deneme sayısı", 50, 1000, 300, step=50,
                         help="Aynı hasta+ilaç kombinasyonunun kaç kez (her seferinde "
@@ -717,29 +762,44 @@ with tab_drug:
 
     if len(drug_keys) > 1:
         interaction_matrix = build_interaction_matrix(drug_keys, all_drug_interactions)
-        if interaction_matrix:
-            st.info(
-                "Seçilen ilaçlar arasında bilinen bir etkileşim kaydı bulundu -- "
-                "saf toplamsal (additive) modelin ÜSTÜNE ek bir sinerji terimi "
-                "uygulanacak (bkz. configs/drug_interactions.yaml)."
-            )
-
-        # PK-seviyeli (klerens/AUC) ilaç-ilaç etkileşimi -- PD-seviyesindeki
-        # interaction_matrix'ten AYRI, bkz. pk.py > pk_interaction_adjusted_ke().
         pk_interaction_matrix = build_pk_interaction_matrix(drug_keys, all_pk_drug_interactions)
-        if pk_interaction_matrix:
-            for (perpetrator, victim), auc_ratio in pk_interaction_matrix.items():
-                record = next(
-                    r for r in all_pk_drug_interactions
-                    if r["perpetrator_drug"] == perpetrator and r["victim_drug"] == victim
-                )
-                st.info(
-                    f"**PK-seviyeli (farmakokinetik) ilaç etkileşimi tespit edildi:** "
-                    f"{all_drugs[perpetrator].display_name} ilacı, {all_drugs[victim].display_name} "
-                    f"klerensini (ilacın vücuttan atılım hızını) ~{auc_ratio}x oranında etkiliyor "
-                    f"(AUC [eğrinin altındaki alan -- toplam ilaç maruziyeti] artışı) -- "
-                    f"kaynak: {record['source']}."
-                )
+
+        # N ilaçta O(N²) çift olabileceği için (ADIM 6), sadece TANIMLI
+        # (config'te kaydı olan) çiftler tablo halinde, yön bilgisiyle
+        # gösteriliyor -- N=2'deki tek satırlık mesaj yerine N'e ölçeklenen
+        # bir görünüm.
+        interaction_rows = []
+        for (a, b), factor in interaction_matrix.items():
+            interaction_rows.append({
+                "Tür": "PD (etki büyüklüğü)",
+                "İlaç 1": all_drugs[drug_keys[a]].display_name,
+                "İlaç 2": all_drugs[drug_keys[b]].display_name,
+                "Yön": "simetrik (N≥3)" if len(drugs) >= 3 else "yönlü (İlaç 1 baskın, N=2 dondurulmuş)",
+                "Değer": f"×{factor}",
+                "Kaynak": "configs/drug_interactions.yaml",
+            })
+        for (perpetrator, victim), auc_ratio in pk_interaction_matrix.items():
+            record = next(
+                r for r in all_pk_drug_interactions
+                if r["perpetrator_drug"] == perpetrator and r["victim_drug"] == victim
+            )
+            interaction_rows.append({
+                "Tür": "PK (klerens/AUC)",
+                "İlaç 1": f"{all_drugs[perpetrator].display_name} (perpetrator)",
+                "İlaç 2": f"{all_drugs[victim].display_name} (victim)",
+                "Yön": "yönlü (perpetrator → victim, simetrik DEĞİL)",
+                "Değer": f"AUC ×{auc_ratio}",
+                "Kaynak": record["source"],
+            })
+
+        if interaction_rows:
+            st.markdown("##### Bilinen İlaç Etkileşimleri")
+            st.caption(
+                "Sadece kaynaklı bir kayda sahip (configs/drug_*_interactions.yaml) "
+                "çiftler listelenir -- tanımlı olmayan çiftler saf toplamsal (additive) "
+                "modelle birleşir, ek bir sinerji terimi UYGULANMAZ."
+            )
+            st.dataframe(pd.DataFrame(interaction_rows), use_container_width=True, hide_index=True)
 
         compare_with_loewe = st.checkbox(
             "Loewe additivity ile de karşılaştır (bilimsel literatürden, deneysel)",
@@ -806,6 +866,12 @@ with tab_sim:
                 mc_result = run_polypharmacy_simulation(
                     patient, drugs, n_realizations=n_runs, interaction_matrix=interaction_matrix,
                     drug_keys=drug_keys, pk_interaction_matrix=pk_interaction_matrix,
+                    # ADR-6 (N_DRUG_AUDIT.md Şüphe B): N=2'de dondurulmuş
+                    # (asimetrik, regresyon kilidi) formül KORUNUYOR; N≥3'te
+                    # simetrikleştirilmiş (emax[a]/emax[b] ortalaması) formüle
+                    # geçiliyor -- bkz. simulation.py > run_polypharmacy_simulation
+                    # docstring'i.
+                    symmetric_interaction_terms=(len(drugs) >= 3),
                 )
             mc_stats = summarize(mc_result)
 
@@ -830,9 +896,9 @@ with tab_sim:
                 "birkaç dakikaya kadar sürebilir, lütfen bekleyin..."
             ):
                 if len(drugs) == 1:
-                    heart_result = run_comparison(patient, drug)
+                    heart_result = cached_run_comparison(patient, drug)
                 else:
-                    heart_result = run_polypharmacy_comparison(patient, drugs)
+                    heart_result = cached_run_polypharmacy_comparison(patient, drugs)
 
             with st.spinner("En iyi doz önerisi hesaplanıyor (istatistiksel + mekanik risk)..."):
                 if len(drugs) == 1:
@@ -951,6 +1017,66 @@ with tab_sim:
         fig_mc = plot_results(sim["mc_result"], patient, sim["drugs"][0], label=sim["drug_names"])
         st.pyplot(fig_mc)
 
+        # N_DRUG_AUDIT.md Şüphe H DÜZELTMESİ: eskiden conc_runs SADECE ilk
+        # ilacın konsantrasyonunu taşıyordu ve hiçbir yerde gösterilmiyordu
+        # (bkz. denetim) -- artık N≥2'de TÜM ilaçların konsantrasyon eğrisi
+        # ayrı ayrı çizilir (SimulationResult.all_conc_runs, ADIM 3.6).
+        if len(sim["drugs"]) > 1 and getattr(sim["mc_result"], "all_conc_runs", None) is not None:
+            st.markdown("##### İlaç Bazında Plazma Konsantrasyonu (ortalama, N deneme)")
+            fig_conc, ax_conc = plt.subplots(figsize=(9, 3.2))
+            all_conc = sim["mc_result"].all_conc_runs  # (n_drugs, n_realizations, n_timepoints)
+            t = sim["mc_result"].t
+            for d_idx, d in enumerate(sim["drugs"]):
+                ax_conc.plot(t, all_conc[d_idx].mean(axis=0), label=d.display_name)
+            ax_conc.set_xlabel("Zaman (saat)")
+            ax_conc.set_ylabel("Konsantrasyon (mg/L)")
+            ax_conc.legend()
+            st.pyplot(fig_conc)
+
+            # Katkı dökümü -- hangi ilaç birleşik nabız/tansiyon değişimine
+            # ne kadar katkı veriyor. heart_result["drug_effects"] her ilacın
+            # İZOLE (tek başına verilseydi ne olurdu) PK/PD tahminini zaten
+            # taşıyor (compute_drug_effect, CircAdapt'siz) -- ek hesap gerekmez.
+            st.markdown("##### İlaç Katkı Dökümü (izole PK/PD tahmini)")
+            st.caption(
+                "Her ilacın TEK BAŞINA (diğerleri yokmuş gibi) üretebileceği pik "
+                "etki -- kombinasyondaki BİRLEŞİK sonuç bu değerlerin basit toplamı "
+                "DEĞİLDİR (Loewe/toplamsal birleştirme, bkz. yukarıdaki sonuç), ama "
+                "'bu bradikardiyi en çok hangi ilaç sürüklüyor' sorusuna hızlı bir "
+                "cevap verir."
+            )
+            contribution_rows = pd.DataFrame([
+                {
+                    "İlaç": d.display_name,
+                    "İzole nabız tahmini (bpm)": eff["hr_drug"],
+                    "Bazalden fark (bpm)": eff["hr_drug"] - patient.baseline_hr,
+                    "İzole SBP tahmini (mmHg)": eff["sbp_drug"],
+                }
+                for d, eff in zip(sim["drugs"], sim["heart_result"]["drug_effects"])
+            ])
+            st.dataframe(
+                contribution_rows.style.format({
+                    "İzole nabız tahmini (bpm)": "{:.1f}", "Bazalden fark (bpm)": "{:+.1f}",
+                    "İzole SBP tahmini (mmHg)": "{:.1f}",
+                }),
+                use_container_width=True, hide_index=True,
+            )
+
+            # Karma yönlü kombinasyon uyarısı (ADR-4) -- hem HR hem SBP için
+            # ayrı ayrı kontrol edilir (bir ilacın HR/SBP yönleri birbirinden
+            # bağımsız olabilir, bkz. pd.py > grouped_loewe_combined_effect).
+            hr_signs = {d.emax_hr >= 0 for d in sim["drugs"]}
+            sbp_signs = {d.emax_sbp >= 0 for d in sim["drugs"]}
+            if len(hr_signs) > 1 or len(sbp_signs) > 1:
+                st.warning(
+                    "**Karma yönlü kombinasyon:** seçili ilaçlardan bazıları nabzı/"
+                    "tansiyonu DÜŞÜRÜRKEN bazıları ARTIRIYOR. Bu durumda kullanılan "
+                    "gruplama+fark yöntemi (bkz. pd.py > grouped_loewe_combined_effect) "
+                    "**literatürden gelen standart bir yöntem DEĞİL** -- projenin kendi "
+                    "mühendislik kararıdır (RESEARCH_N_DRUG.md ADR-4). Sonuçları "
+                    "yorumlarken bunu göz önünde bulundurun."
+                )
+
         st.subheader("Klinik Özet")
         summary_card = st.container(border=True)
         m1, m2, m3 = summary_card.columns(3)
@@ -991,6 +1117,20 @@ with tab_sim:
                       f"{sim['loewe_stats']['mean_min_hr']:.1f} bpm",
                       delta=f"{sim['loewe_stats']['mean_min_hr'] - sim['mc_stats']['mean_min_hr']:+.1f} bpm")
 
+            # ADR-5 (N_DRUG_AUDIT.md Şüphe C): Loewe'nin birleşik etkiyi
+            # min(emax_i) ile sınırlaması N büyüdükçe DAHA SIK bağlayıcı
+            # hale geliyor -- hangi ilacın bu tavanı belirlediği artık
+            # açıkça gösteriliyor (bkz. pd.py > loewe_combined_effect
+            # "BİLİNEN KAPSAM SINIRI").
+            ceiling_drug = min(sim["drugs"], key=lambda d: abs(d.emax_hr))
+            st.caption(
+                f"ℹ️ Loewe additivity'nin birleşik nabız etkisi, en düşük tavanlı "
+                f"(|Emax|) ilaç olan **{ceiling_drug.display_name}** (|Emax_hr|="
+                f"{abs(ceiling_drug.emax_hr):.0f} bpm) tarafından SINIRLANIR -- "
+                f"kombinasyon, kaç ilaç eklenirse eklensin bu tavanı matematiksel "
+                f"olarak aşamaz (bkz. RESEARCH_N_DRUG.md ADR-5)."
+            )
+
 # --- Sekme 4: CircAdapt Sonuçları ---
 with tab_heart:
     if "sim" not in st.session_state:
@@ -1021,18 +1161,38 @@ with tab_heart:
                 f"etki oranı={eff['effect_fraction']:.2f}"
             )
 
+        # ADIM 4.2: eşik aşımı artık SADECE AV blok (c_tau_av1) değil --
+        # t_cycle/Sf_act/ArtVen.p0 için de genelleştirilmiş bir ön-kontrol
+        # var (bkz. integrate_drug_with_circadapt.cumulative_parameter_
+        # multipliers/circadapt_instability_risk). İKİSİ DE p_drug/v_drug'ı
+        # np.nan bırakıyor -- burada .max()/.min() ÇAĞRILMAMALI, onun
+        # yerine hangi durumun tetiklendiğini açıklayan bir mesaj gösterilir.
         if heart.get("av_block_triggered", False):
-            # bkz. integrate_drug_with_circadapt.py > run_comparison/
-            # run_polypharmacy_comparison: eşik aşıldığında CircAdapt hiç
-            # çalıştırılmıyor (çökeceği için), p_drug/v_drug np.nan --
-            # burada .max()/.min() ÇAĞRILMAZ, onun yerine bu durumu
-            # açıklayan bir mesaj gösterilir.
             st.error(
                 "**AV blok tetiklendi -- hemodinamik iz mevcut değil "
                 f"(HR={heart['hr_drug_model']:.0f} bpm, kaçış ritmi).** "
                 "Kümülatif AV iletim gecikmesi çarpanı, CircAdapt'in sayısal "
                 "olarak çökeceği eşiği aştığı için gerçek bir basınç/hacim "
                 "simülasyonu ÇALIŞTIRILMADI -- bkz. CALIBRATION_REPORT.md §8."
+            )
+        elif heart.get("instability_triggered", False):
+            unstable_param = heart.get("unstable_parameter")
+            PARAM_EXPLANATIONS = {
+                "t_cycle": "nabız (kalp siklus süresi) -- seçilen ilaç(lar) çok güçlü/çok "
+                           "sayıda negatif ya da pozitif kronotrop (nabzı değiştiren) etki biriktiriyor",
+                "Sf_act": "kontraktilite (kalbin kasılma gücü) -- beta-bloker/pozitif inotrop "
+                          "ilaçların birikimli etkisi çok büyük",
+                "ArtVen.p0": "sistemik damar direnci -- vazodilatör ilaçların birikimli etkisi çok büyük",
+            }
+            explanation = PARAM_EXPLANATIONS.get(unstable_param, unstable_param)
+            st.error(
+                f"**Sayısal kararlılık sınırı aşıldı ({unstable_param}) -- hemodinamik iz "
+                f"mevcut değil.** Bu ilaç kombinasyonu, {explanation} üzerinde CircAdapt'in "
+                "(gerçek kalp mekaniği motoru) sayısal olarak çökeceği bir büyüklüğe ulaşıyor "
+                "-- bu yüzden model HİÇ ÇALIŞTIRILMADI (çökmesi beklenip yakalanmak yerine "
+                "önceden tespit edildi). Gösterilen nabız tahmini "
+                f"(HR≈{heart['hr_drug_model']:.0f} bpm), CircAdapt'siz, SADECE istatistiksel "
+                "PK/PD zincirinin tahminidir -- bkz. CALIBRATION_REPORT.md §10."
             )
         else:
             fig_heart = build_comparison_figure(
@@ -1171,12 +1331,24 @@ with tab_observe:
         "zincirinin her halkasını) gizlemeden gösterir."
     )
     if len(drugs) > 1:
+        observe_drug_key = st.selectbox(
+            "Adım-adım hangi ilaç için incelensin?",
+            options=drug_keys,
+            format_func=lambda k: all_drugs[k].display_name,
+            key="observe_drug_key",
+            help="Bu sayfa (adım-adım tek iz gösterimi) TEK bir ilacın PK/PD "
+                 "zincirini gösterir -- kombinasyonun BİRLEŞİK sonucunu görmek "
+                 "için Simülasyon/CircAdapt sekmelerine bakın.",
+        )
+        observe_drug = drugs[drug_keys.index(observe_drug_key)]
         st.info(
             f"{len(drugs)} ilaç seçili -- bu sayfa (adım-adım tek iz gösterimi) "
-            f"şu an sadece İLK seçilen ilaç için çalışıyor: **{drug.display_name}**. "
+            f"seçtiğiniz **{observe_drug.display_name}** için çalışıyor. "
             "Kombinasyonun BİRLEŞİK sonucunu görmek için Simülasyon/CircAdapt "
             "sekmelerine bakın."
         )
+    else:
+        observe_drug = drug
 
     # --- Akış diyagramı ---
     flow1, flow_arrow1, flow2, flow_arrow2, flow3 = st.columns([4, 1, 4, 1, 4])
@@ -1207,7 +1379,7 @@ with tab_observe:
     st.divider()
 
     # --- Referans iz: gürültüsüz, tek, yeniden üretilebilir (varsayılan/hızlı motor) ---
-    ref = run_reference_trace(patient, drug)
+    ref = run_reference_trace(patient, observe_drug)
     n_points = len(ref["t"])
 
     st.markdown("#### Durum Tablosu")
@@ -1260,7 +1432,7 @@ with tab_observe:
 t = {t_sel:.2f} saat'teki DURUM:
 
    GİRDİ (bu adıma gelen durum): kalp hızı={hr_prev:.1f} bpm, tansiyon={sbp_prev:.1f} mmHg
-   AKSİYON: {drug.display_name} {drug.dose_mg:.1f}mg (t=0'da verildi, şu an konsantrasyon={conc_sel:.4f} mg/L)
+   AKSİYON: {observe_drug.display_name} {observe_drug.dose_mg:.1f}mg (t=0'da verildi, şu an konsantrasyon={conc_sel:.4f} mg/L)
    HESAPLAMA: ilaç_etki_oranı = {effect_sel:.2f}  (Emax formülü: sensitivity * conc / (EC50 + conc))
    ÇIKTI (yeni durum): kalp hızı={hr_sel:.1f} bpm, tansiyon={sbp_sel:.1f} mmHg
 ```
@@ -1278,7 +1450,7 @@ t = {t_sel:.2f} saat'teki DURUM:
         "denemede örneklenen değerleri ve sonucu görebilirsin.",
     )
     observe_n_runs = 300
-    mc_for_observe = run_monte_carlo(patient, drug, n_realizations=observe_n_runs)
+    mc_for_observe = run_monte_carlo(patient, observe_drug, n_realizations=observe_n_runs)
 
     trial_idx = st.slider(
         "Deneme # seç", 0, observe_n_runs - 1, 0,
@@ -1326,12 +1498,13 @@ t = {t_sel:.2f} saat'teki DURUM:
         "saniye sürdüğü için -- sadece İKİ referans an için çalıştırılır: "
         "ilaçsız (baseline) ve pik etki anı."
     )
+    observe_inputs = current_inputs + (observe_drug.display_name,)
     if st.button("Gerçek Kalp Modeliyle Göster"):
         try:
             with st.spinner("CircAdapt çalıştırılıyor..."):
                 st.session_state["observe_heart"] = {
-                    "result": run_comparison(patient, drug),
-                    "inputs": current_inputs,
+                    "result": cached_run_comparison(patient, observe_drug),
+                    "inputs": observe_inputs,
                 }
         except CircAdaptException:
             st.error(
@@ -1342,7 +1515,7 @@ t = {t_sel:.2f} saat'teki DURUM:
 
     if "observe_heart" in st.session_state:
         oh = st.session_state["observe_heart"]
-        if oh["inputs"] != current_inputs:
+        if oh["inputs"] != observe_inputs:
             st.warning("Girdiler değişti -- güncel sonuç için butona tekrar basın.")
         oh_heart = oh["result"]
         if oh_heart.get("av_block_triggered", False):
@@ -1351,6 +1524,14 @@ t = {t_sel:.2f} saat'teki DURUM:
                 f"(HR={oh_heart['hr_drug_model']:.0f} bpm, kaçış ritmi).** "
                 "Pik etki anı için gerçek bir basınç/hacim simülasyonu "
                 "ÇALIŞTIRILMADI -- bkz. CALIBRATION_REPORT.md §8."
+            )
+        elif oh_heart.get("instability_triggered", False):
+            st.error(
+                f"**Sayısal kararlılık sınırı aşıldı ({oh_heart.get('unstable_parameter')}) "
+                "-- hemodinamik iz mevcut değil.** Bu doz/hasta kombinasyonu CircAdapt'in "
+                "sayısal olarak çökeceği bir büyüklüğe ulaşıyor -- model HİÇ ÇALIŞTIRILMADI, "
+                f"gösterilen nabız (HR≈{oh_heart['hr_drug_model']:.0f} bpm) SADECE PK/PD "
+                "tahminidir. bkz. CALIBRATION_REPORT.md §10."
             )
         else:
             edv_b, esv_b = oh_heart["v_base"].max(), oh_heart["v_base"].min()
@@ -1404,19 +1585,39 @@ with tab_jepa:
         "proje_detayli_anlatim.html Bölüm 8 ve logs/SUMMARY_1560.md."
     )
 
-    if drug.drug_class not in SUPPORTED_DRUG_CLASSES:
+    # ADIM 6: eskiden SADECE drugs[0]'ın sınıfına bakılıyordu -- N ilaç
+    # seçildiğinde, ilk ilaç desteklenmeyen bir sınıftan olsa bile (örn.
+    # vazodilator), listede DESTEKLENEN bir ilaç varsa (örn. 2. sırada bir
+    # beta-bloker) tüm sekme gereksiz yere kapanıyordu. Artık desteklenen
+    # sınıftaki TÜM seçili ilaçlar arasından kullanıcı seçebiliyor.
+    supported_drug_keys = [k for k in drug_keys if all_drugs[k].drug_class in SUPPORTED_DRUG_CLASSES]
+    if not supported_drug_keys:
         st.info(
             f"JEPA modeli şu an sadece **beta-bloker** ve **pozitif inotrop** "
-            f"sınıfı ilaçlarla eğitildi -- seçili ilaç "
-            f"({DRUG_CLASS_LABELS.get(drug.drug_class, drug.drug_class)}) "
+            f"sınıfı ilaçlarla eğitildi -- seçili ilaç(lar)ın hiçbiri "
+            "(" + ", ".join(f"{all_drugs[k].display_name} [{DRUG_CLASS_LABELS.get(all_drugs[k].drug_class, all_drugs[k].drug_class)}]" for k in drug_keys) + ") "
             "desteklenmiyor. 'İlaç Seçimi' sekmesinden uygun bir ilaç seçin."
         )
     else:
-        if len(drugs) > 1:
-            st.info(
-                f"{len(drugs)} ilaç seçili -- bu sekme şu an sadece TEK ilaç için "
-                f"çalışıyor: **{drug.display_name}**."
+        if len(drug_keys) > 1:
+            jepa_drug_key = st.selectbox(
+                "JEPA tahmini hangi ilaç için çalışsın?",
+                options=supported_drug_keys,
+                format_func=lambda k: all_drugs[k].display_name,
+                key="jepa_drug_key",
+                help="JEPA modeli TEK ilaçlık trajectory'lerle eğitildi -- "
+                     "kombinasyonun BİRLEŞİK etkisini değil, seçtiğiniz TEK "
+                     "ilacın izole etkisini tahmin eder.",
             )
+            jepa_drug = drugs[drug_keys.index(jepa_drug_key)]
+            if len(supported_drug_keys) < len(drug_keys):
+                unsupported = [all_drugs[k].display_name for k in drug_keys if k not in supported_drug_keys]
+                st.caption(
+                    f"Not: {', '.join(unsupported)} JEPA tarafından desteklenmediği "
+                    "için seçenekler arasında yok."
+                )
+        else:
+            jepa_drug = drug
 
         if st.button("JEPA ile 40 Dakikalık Tahmini Çalıştır", type="primary"):
             with st.spinner(
@@ -1426,7 +1627,7 @@ with tab_jepa:
             ):
                 try:
                     traj_result = run_transient_trajectory(
-                        patient, drug, window_min=JEPA_WINDOW_MIN,
+                        patient, jepa_drug, window_min=JEPA_WINDOW_MIN,
                         frame_interval_min=JEPA_FRAME_INTERVAL_MIN,
                     )
                 except CircAdaptException:
