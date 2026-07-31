@@ -1,0 +1,24 @@
+Sentetik veri üretimi baþlýyor: 300 hasta x 5 doz (hedef 1500 koþum)...
+  ... 20/300 hasta iþlendi (baþarýlý doz: 100, çöken doz: 0, AV-bloðu atlanan: 0)
+  ... 40/300 hasta iþlendi (baþarýlý doz: 200, çöken doz: 0, AV-bloðu atlanan: 0)
+  ... 60/300 hasta iþlendi (baþarýlý doz: 300, çöken doz: 0, AV-bloðu atlanan: 0)
+  ... 80/300 hasta iþlendi (baþarýlý doz: 400, çöken doz: 0, AV-bloðu atlanan: 0)
+  ... 100/300 hasta iþlendi (baþarýlý doz: 500, çöken doz: 0, AV-bloðu atlanan: 0)
+  ... 120/300 hasta iþlendi (baþarýlý doz: 600, çöken doz: 0, AV-bloðu atlanan: 0)
+  ... 140/300 hasta iþlendi (baþarýlý doz: 700, çöken doz: 0, AV-bloðu atlanan: 0)
+  ... 160/300 hasta iþlendi (baþarýlý doz: 800, çöken doz: 0, AV-bloðu atlanan: 0)
+  ... 180/300 hasta iþlendi (baþarýlý doz: 900, çöken doz: 0, AV-bloðu atlanan: 0)
+  ... 200/300 hasta iþlendi (baþarýlý doz: 1000, çöken doz: 0, AV-bloðu atlanan: 0)
+  ... 220/300 hasta iþlendi (baþarýlý doz: 1100, çöken doz: 0, AV-bloðu atlanan: 0)
+  ... 240/300 hasta iþlendi (baþarýlý doz: 1200, çöken doz: 0, AV-bloðu atlanan: 0)
+  ... 260/300 hasta iþlendi (baþarýlý doz: 1300, çöken doz: 0, AV-bloðu atlanan: 0)
+  ... 280/300 hasta iþlendi (baþarýlý doz: 1400, çöken doz: 0, AV-bloðu atlanan: 0)
+  ... 300/300 hasta iþlendi (baþarýlý doz: 1500, çöken doz: 0, AV-bloðu atlanan: 0)
+
+Tamamlandý (1271.6 sn).
+  Talep edilen hasta: 300
+  Baseline çöktü (hasta tamamen atlandý): 0
+  Baþarýlý (hasta, doz) çifti: 1500
+  Ýlaçlý koþum çöktü: 0
+  AV-bloðu riski nedeniyle atlandý: 0
+  Kaydedildi: C:\Users\oktay\Downloads\vivax_world_model_demo\vivax_world_model_demo\data\dynamics_dataset

@@ -1,0 +1,1225 @@
+<title>Mini Klinik Dünya Modeli — Teknik Derin Anlatım</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+<style>
+  :root {
+    --bg: #f3f5f2;
+    --surface: #ffffff;
+    --surface-2: #eceeea;
+    --ink: #16211f;
+    --ink-2: #47554f;
+    --muted: #7c8a84;
+    --border: #dde1dc;
+    --accent: #0f6e63;
+    --accent-ink: #ffffff;
+    --accent-soft: #e3f0ec;
+    --warn: #96591c;
+    --warn-soft: #f8eee0;
+    --danger: #a13a3a;
+    --danger-soft: #f8ecec;
+    --code-bg: #eaeeeb;
+    --code-ink: #2a3532;
+    --shadow: 0 1px 2px rgba(20,30,28,0.04), 0 4px 16px rgba(20,30,28,0.05);
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Noto Serif", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1614;
+      --surface: #161f1c;
+      --surface-2: #1c2622;
+      --ink: #e7ede9;
+      --ink-2: #b4c1ba;
+      --muted: #7e8c86;
+      --border: #2a3733;
+      --accent: #4fd3bd;
+      --accent-ink: #052420;
+      --accent-soft: #17322c;
+      --warn: #e0a75f;
+      --warn-soft: #2c2416;
+      --danger: #e0908f;
+      --danger-soft: #2e1c1c;
+      --code-bg: #1d2723;
+      --code-ink: #cfe0d8;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 20px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1614; --surface: #161f1c; --surface-2: #1c2622; --ink: #e7ede9; --ink-2: #b4c1ba;
+    --muted: #7e8c86; --border: #2a3733; --accent: #4fd3bd; --accent-ink: #052420; --accent-soft: #17322c;
+    --warn: #e0a75f; --warn-soft: #2c2416; --danger: #e0908f; --danger-soft: #2e1c1c;
+    --code-bg: #1d2723; --code-ink: #cfe0d8; --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 20px rgba(0,0,0,0.35);
+  }
+  :root[data-theme="light"] {
+    --bg: #f3f5f2; --surface: #ffffff; --surface-2: #eceeea; --ink: #16211f; --ink-2: #47554f;
+    --muted: #7c8a84; --border: #dde1dc; --accent: #0f6e63; --accent-ink: #ffffff; --accent-soft: #e3f0ec;
+    --warn: #96591c; --warn-soft: #f8eee0; --danger: #a13a3a; --danger-soft: #f8ecec;
+    --code-bg: #eaeeeb; --code-ink: #2a3532; --shadow: 0 1px 2px rgba(20,30,28,0.04), 0 4px 16px rgba(20,30,28,0.05);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans);
+    font-size: 16px; line-height: 1.65; -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); }
+
+  .layout { display: flex; max-width: 1400px; margin: 0 auto; align-items: flex-start; }
+
+  /* ---- Sidebar ---- */
+  nav.sidebar {
+    position: sticky; top: 0; height: 100vh; width: 272px; flex: 0 0 272px;
+    overflow-y: auto; padding: 28px 18px 40px; border-right: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .brand { font-family: var(--serif); font-size: 1.05rem; font-weight: 600; letter-spacing: 0.01em; margin-bottom: 4px; }
+  .brand-sub { font-size: 0.76rem; color: var(--muted); margin-bottom: 26px; line-height: 1.5; }
+  nav.sidebar ol { list-style: none; margin: 0; padding: 0; counter-reset: sec; }
+  nav.sidebar li { counter-increment: sec; margin-bottom: 2px; }
+  nav.sidebar a {
+    display: flex; gap: 10px; align-items: baseline; text-decoration: none; color: var(--ink-2);
+    font-size: 0.86rem; padding: 7px 10px; border-radius: 7px; transition: background 0.12s, color 0.12s;
+  }
+  nav.sidebar a:hover { background: var(--accent-soft); color: var(--accent); }
+  nav.sidebar a.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  nav.sidebar a .n {
+    font-family: var(--mono); font-size: 0.72rem; color: var(--muted); min-width: 1.4em;
+  }
+  nav.sidebar .glossary-link {
+    margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border);
+  }
+  .theme-note { margin-top: 22px; font-size: 0.72rem; color: var(--muted); line-height: 1.5; }
+
+  /* ---- Content ---- */
+  main { flex: 1 1 auto; min-width: 0; padding: 0 0 120px; }
+  .hero {
+    padding: 64px 56px 40px; border-bottom: 1px solid var(--border);
+  }
+  .hero .eyebrow {
+    font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 14px;
+  }
+  .hero h1 {
+    font-family: var(--serif); font-size: 2.5rem; line-height: 1.15; margin: 0 0 16px; text-wrap: balance;
+    max-width: 20ch;
+  }
+  .hero p.lead { font-size: 1.08rem; color: var(--ink-2); max-width: 62ch; margin: 0 0 8px; }
+  .hero .warnbox { margin-top: 22px; }
+
+  section.chapter { padding: 56px 56px 8px; border-bottom: 1px solid var(--border); max-width: 900px; }
+  section.chapter h2 {
+    font-family: var(--serif); font-size: 1.9rem; margin: 0 0 6px; text-wrap: balance;
+  }
+  section.chapter .chapter-kicker {
+    font-family: var(--mono); font-size: 0.74rem; color: var(--muted); letter-spacing: 0.06em;
+    text-transform: uppercase; margin-bottom: 10px;
+  }
+  section.chapter > .intro { font-size: 1.02rem; color: var(--ink-2); margin-bottom: 30px; max-width: 68ch; }
+
+  h3.q {
+    font-family: var(--sans); font-size: 0.95rem; font-weight: 700; margin: 34px 0 10px;
+    display: flex; gap: 10px; align-items: baseline;
+  }
+  h3.q .qnum {
+    font-family: var(--mono); font-size: 0.78rem; color: var(--accent-ink); background: var(--accent);
+    border-radius: 5px; padding: 1px 7px; flex: 0 0 auto;
+  }
+  h4.sub { font-family: var(--serif); font-size: 1.2rem; margin: 30px 0 8px; }
+
+  p { margin: 0 0 14px; max-width: 68ch; }
+  ul, ol.plain { margin: 0 0 14px; padding-left: 22px; max-width: 68ch; }
+  li { margin-bottom: 6px; }
+
+  .formula-block {
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px 22px; margin: 14px 0 20px; overflow-x: auto;
+  }
+  .formula-block mjx-container { font-size: 1.02rem !important; }
+
+  code, .inline-code {
+    font-family: var(--mono); font-size: 0.86em; background: var(--code-bg); color: var(--code-ink);
+    padding: 0.1em 0.4em; border-radius: 4px;
+  }
+  .src-ref {
+    font-family: var(--mono); font-size: 0.74rem; color: var(--muted); margin: 6px 0 22px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .src-ref::before { content: "kaynak:"; color: var(--muted); font-family: var(--sans); font-style: italic; }
+  .src-ref b { color: var(--ink-2); font-weight: 500; background: var(--code-bg); padding: 1px 6px; border-radius: 4px; }
+
+  table.datatable {
+    width: 100%; border-collapse: collapse; margin: 14px 0 22px; font-size: 0.9rem;
+  }
+  table.datatable th, table.datatable td {
+    border: 1px solid var(--border); padding: 7px 10px; text-align: left;
+  }
+  table.datatable th { background: var(--surface-2); font-weight: 600; }
+  table.datatable td.num, table.datatable th.num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); }
+
+  .callout {
+    border-radius: 10px; padding: 14px 18px; margin: 16px 0 22px; font-size: 0.92rem;
+    border: 1px solid transparent;
+  }
+  .callout .callout-label {
+    font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em;
+    display: block; margin-bottom: 6px; font-weight: 700;
+  }
+  .callout.warn { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+  .callout.warn .callout-label { color: var(--warn); }
+  .callout.danger { background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
+  .callout.danger .callout-label { color: var(--danger); }
+  .callout.accent { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+  .callout.accent .callout-label { color: var(--accent); }
+
+  .risk-grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin: 16px 0 24px; }
+  .risk-card {
+    border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; background: var(--surface);
+    display: grid; grid-template-columns: 1.4fr 1fr 1.6fr; gap: 14px; align-items: start;
+  }
+  .risk-card .risk-head { font-weight: 700; font-size: 0.88rem; }
+  .risk-card .risk-target { font-size: 0.82rem; color: var(--muted); }
+  .risk-card .risk-detail { font-size: 0.84rem; color: var(--ink-2); }
+  .risk-card .tag {
+    display: inline-block; font-family: var(--mono); font-size: 0.68rem; background: var(--code-bg);
+    padding: 1px 7px; border-radius: 20px; margin-top: 4px;
+  }
+
+  .diagram-wrap { margin: 24px 0 12px; overflow-x: auto; }
+  .diagram-wrap svg { display: block; margin: 0 auto; }
+
+  .term-link {
+    border-bottom: 1px dotted var(--accent); text-decoration: none; cursor: help; color: inherit;
+  }
+
+  .walkthrough-step {
+    display: grid; grid-template-columns: 44px 1fr; gap: 16px; margin-bottom: 26px;
+  }
+  .walkthrough-step .wnum {
+    width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: var(--accent-ink);
+    display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-weight: 700; font-size: 0.85rem;
+  }
+  .walkthrough-step .wcontent h4 { margin: 2px 0 8px; font-family: var(--sans); font-size: 1rem; font-weight: 700; }
+
+  .glossary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-top: 20px; }
+  .glossary-item { border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; background: var(--surface); }
+  .glossary-item dt { font-weight: 700; font-size: 0.92rem; margin-bottom: 4px; }
+  .glossary-item dt .en { font-weight: 400; color: var(--muted); font-size: 0.8rem; }
+  .glossary-item dd { margin: 0; color: var(--ink-2); font-size: 0.86rem; }
+
+  footer.page-footer {
+    padding: 40px 56px 60px; color: var(--muted); font-size: 0.82rem; max-width: 900px;
+  }
+
+  @media (max-width: 980px) {
+    nav.sidebar { display: none; }
+    section.chapter, .hero, footer.page-footer { padding-left: 24px; padding-right: 24px; }
+    .risk-card { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div class="layout">
+  <nav class="sidebar" aria-label="Bölüm gezinme">
+    <div class="brand">Mini Klinik Dünya Modeli</div>
+    <div class="brand-sub">Teknik derin anlatım — her formül, her veri akışı, her tasarım kararı kaynak koduna bağlı.</div>
+    <ol>
+      <li><a href="#s1"><span class="n">01</span> Giriş ve büyük resim</a></li>
+      <li><a href="#s2"><span class="n">02</span> Hasta profili çıkarımı</a></li>
+      <li><a href="#s3"><span class="n">03</span> Kovaryat formülleri</a></li>
+      <li><a href="#s4"><span class="n">04</span> Farmakokinetik (PK)</a></li>
+      <li><a href="#s5"><span class="n">05</span> Farmakodinamik (PD)</a></li>
+      <li><a href="#s6"><span class="n">06</span> CircAdapt — organ mekaniği</a></li>
+      <li><a href="#s7"><span class="n">07</span> Monte Carlo ve doz önerisi</a></li>
+      <li><a href="#s8"><span class="n">08</span> JEPA dünya modeli</a></li>
+      <li><a href="#s9"><span class="n">09</span> Uçtan uca yürüyüş</a></li>
+    </ol>
+    <div class="glossary-link">
+      <a href="#s10">→ Sözlük (Bölüm 10)</a>
+    </div>
+    <div class="theme-note">Sayfa açık/koyu temayı otomatik izler. Formüller MathJax ile (CDN) render edilir — internet bağlantısı gerektirir.</div>
+  </nav>
+
+  <main>
+    <div class="hero">
+      <div class="eyebrow">Teknik Dokümantasyon · Ders Kitabı Derinliğinde</div>
+      <h1>Bir kreatinin değerinin, kalbin basınç-hacim eğrisine dönüşene kadar geçtiği her adım</h1>
+      <p class="lead">
+        Bu sayfa, projenin claude.com-tarzı özet sunumunun <em>değil</em>, mühendislik/tıp
+        arka planına sahip birinin okuyup gerçekten anlayabileceği derinlikte teknik bir
+        referansın peşinde. Her bölüm dört soruya cevap veriyor: <b>ne işe yarıyor</b>,
+        <b>formülü tam olarak nedir</b>, <b>veri nereden nereye akıyor</b>, ve
+        <b>neden bu şekilde tasarlandı</b>. Her iddia, altındaki gri referans satırında
+        işaret edilen gerçek dosyaya dayanıyor.
+      </p>
+      <div class="callout accent warnbox">
+        <span class="callout-label">Okuma notu</span>
+        Bu proje bir kavram-kanıtıdır (proof-of-concept), klinik karar destek aracı değildir.
+        Sayfa boyunca <span class="inline-code">⚠️ temsili</span> etiketli değerler,
+        literatürden değil mühendislik yaklaşıklığından gelir — Bölüm 4/5, hangi sayının
+        gerçekten yayınlanmış bir kaynaktan geldiğini, hangisinin olmadığını açıkça ayırır.
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- SECTION 1 -->
+    <!-- ============================================================ -->
+    <section class="chapter" id="s1">
+      <div class="chapter-kicker">Bölüm 01</div>
+      <h2>Giriş ve Büyük Resim</h2>
+      <p class="intro">
+        Sistem iki tamamen farklı "model" kavramını bir araya getiriyor: <b>mekanistik</b>
+        modeller (fiziğin/farmakolojinin bilinen denklemlerini çözen, hiçbir şey
+        "öğrenmeyen" kod — PK, PD, CircAdapt) ve tek bir <b>öğrenilmiş</b> bileşen
+        (Gemini'nin PDF'ten veri çıkarması, ve deneysel JEPA dünya modeli). Aşağıdaki
+        diyagram, bir PDF yüklemesinden simülasyon sonucuna kadar verinin izlediği TÜM
+        yolu gösteriyor — sayfanın geri kalanındaki her bölüm, bu haritadaki bir kutuya
+        karşılık geliyor.
+      </p>
+
+      <div class="diagram-wrap">
+        <svg width="820" height="1360" viewBox="0 0 820 1360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Uçtan uca veri akış diyagramı">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"></path>
+            </marker>
+          </defs>
+          <style>
+            .box { fill: var(--surface); stroke: var(--border); stroke-width: 1.4; rx: 10; }
+            .box.learned { stroke: var(--accent); stroke-width: 1.8; }
+            .box.mech { stroke: var(--ink-2); }
+            .lbl { font-family: var(--sans); font-size: 13px; fill: var(--ink); font-weight: 600; }
+            .sub { font-family: var(--mono); font-size: 10.5px; fill: var(--muted); }
+            .edge { stroke: var(--muted); stroke-width: 1.4; fill: none; marker-end: url(#arrow); }
+            .grouplbl { font-family: var(--mono); font-size: 10.5px; fill: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; }
+          </style>
+
+          <!-- Column: extraction -->
+          <rect class="box" x="290" y="10" width="240" height="52"/>
+          <text class="lbl" x="410" y="32" text-anchor="middle">PDF Hasta Raporu</text>
+          <text class="sub" x="410" y="48" text-anchor="middle">patient_profile/file_ingestion.py</text>
+
+          <line class="edge" x1="410" y1="62" x2="410" y2="92"/>
+          <rect class="box learned" x="270" y="92" width="280" height="58"/>
+          <text class="lbl" x="410" y="114" text-anchor="middle">Gemini extraction (ÖĞRENİLMİŞ)</text>
+          <text class="sub" x="410" y="132" text-anchor="middle">llm_extraction.py :: response_schema</text>
+
+          <line class="edge" x1="410" y1="150" x2="410" y2="180"/>
+          <rect class="box" x="270" y="180" width="280" height="52"/>
+          <text class="lbl" x="410" y="202" text-anchor="middle">PatientProfile (Pydantic)</text>
+          <text class="sub" x="410" y="218" text-anchor="middle">patient_profile/schema.py</text>
+
+          <line class="edge" x1="410" y1="232" x2="410" y2="262"/>
+          <rect class="box" x="270" y="262" width="280" height="52"/>
+          <text class="lbl" x="410" y="284" text-anchor="middle">Doğrulama + çapraz-tutarlılık</text>
+          <text class="sub" x="410" y="300" text-anchor="middle">validation.py :: validate_profile()</text>
+
+          <line class="edge" x1="410" y1="314" x2="410" y2="344"/>
+          <rect class="box" x="270" y="344" width="280" height="52"/>
+          <text class="lbl" x="410" y="366" text-anchor="middle">Kullanıcı onay ekranı</text>
+          <text class="sub" x="410" y="382" text-anchor="middle">review_data.py :: confirm_and_apply()</text>
+
+          <line class="edge" x1="410" y1="396" x2="410" y2="426"/>
+          <rect class="box" x="250" y="426" width="320" height="58"/>
+          <text class="lbl" x="410" y="448" text-anchor="middle">Cockcroft-Gault / Child-Pugh / allometri</text>
+          <text class="sub" x="410" y="466" text-anchor="middle">covariate_mapping.py :: apply_patient_covariates()</text>
+
+          <line class="edge" x1="410" y1="484" x2="410" y2="514"/>
+          <rect class="box" x="290" y="514" width="240" height="52"/>
+          <text class="lbl" x="410" y="536" text-anchor="middle">Patient (dataclass)</text>
+          <text class="sub" x="410" y="552" text-anchor="middle">src/worldmodel/patient.py</text>
+
+          <!-- split into PK/PD -->
+          <line class="edge" x1="410" y1="566" x2="410" y2="596"/>
+          <rect class="box" x="270" y="596" width="280" height="52"/>
+          <text class="lbl" x="410" y="618" text-anchor="middle">PK — plazma konsantrasyonu</text>
+          <text class="sub" x="410" y="634" text-anchor="middle">src/worldmodel/pk.py</text>
+
+          <line class="edge" x1="410" y1="648" x2="410" y2="678"/>
+          <rect class="box" x="270" y="678" width="280" height="52"/>
+          <text class="lbl" x="410" y="700" text-anchor="middle">PD — etki (Emax/Hill/Loewe)</text>
+          <text class="sub" x="410" y="716" text-anchor="middle">src/worldmodel/pd.py</text>
+
+          <!-- fork: statistical vs mechanical -->
+          <line class="edge" x1="410" y1="730" x2="220" y2="770"/>
+          <line class="edge" x1="410" y1="730" x2="600" y2="770"/>
+
+          <text class="grouplbl" x="220" y="760" text-anchor="middle">istatistiksel dal</text>
+          <rect class="box mech" x="80" y="770" width="280" height="58"/>
+          <text class="lbl" x="220" y="792" text-anchor="middle">Monte Carlo (n=300 deneme)</text>
+          <text class="sub" x="220" y="810" text-anchor="middle">simulation.py :: run_monte_carlo()</text>
+
+          <text class="grouplbl" x="600" y="760" text-anchor="middle">mekanik dal</text>
+          <rect class="box mech" x="460" y="770" width="280" height="58"/>
+          <text class="lbl" x="600" y="792" text-anchor="middle">CircAdapt 0D kalp-damar modeli</text>
+          <text class="sub" x="600" y="810" text-anchor="middle">integrate_drug_with_circadapt.py</text>
+
+          <line class="edge" x1="220" y1="828" x2="220" y2="858"/>
+          <rect class="box" x="80" y="858" width="280" height="52"/>
+          <text class="lbl" x="220" y="880" text-anchor="middle">Bradikardi riski, doz taraması</text>
+          <text class="sub" x="220" y="896" text-anchor="middle">simulation.py :: recommend_dose()</text>
+
+          <line class="edge" x1="600" y1="828" x2="600" y2="858"/>
+          <rect class="box" x="460" y="858" width="280" height="52"/>
+          <text class="lbl" x="600" y="880" text-anchor="middle">LV basınç-hacim eğrisi, EF/CO</text>
+          <text class="sub" x="600" y="896" text-anchor="middle">clinical_metrics.py</text>
+
+          <line class="edge" x1="220" y1="910" x2="380" y2="944"/>
+          <line class="edge" x1="600" y1="910" x2="440" y2="944"/>
+          <rect class="box" x="280" y="944" width="260" height="52"/>
+          <text class="lbl" x="410" y="966" text-anchor="middle">Birleşik klinik öneri</text>
+          <text class="sub" x="410" y="982" text-anchor="middle">streamlit_app.py</text>
+
+          <!-- Learned world model branch, separate lineage from CircAdapt -->
+          <line class="edge" x1="600" y1="828" x2="600" y2="1030" stroke-dasharray="3,3"/>
+          <text class="grouplbl" x="600" y="1050" text-anchor="middle">ayrı hat — öğrenilmiş dünya modeli</text>
+
+          <rect class="box" x="460" y="1060" width="280" height="58"/>
+          <text class="lbl" x="600" y="1082" text-anchor="middle">Atım-atım transient trajectory'ler</text>
+          <text class="sub" x="600" y="1100" text-anchor="middle">scripts/generate_transient_dataset.py</text>
+
+          <line class="edge" x1="600" y1="1118" x2="600" y2="1148"/>
+          <rect class="box learned" x="460" y="1148" width="280" height="58"/>
+          <text class="lbl" x="600" y="1170" text-anchor="middle">JEPA: Encoder + Predictor (ÖĞRENİLMİŞ)</text>
+          <text class="sub" x="600" y="1188" text-anchor="middle">learned_dynamics/train_jepa_transient.py</text>
+
+          <line class="edge" x1="600" y1="1206" x2="600" y2="1236"/>
+          <rect class="box learned" x="460" y="1236" width="280" height="58"/>
+          <text class="lbl" x="600" y="1258" text-anchor="middle">Otoregresif rollout değerlendirme</text>
+          <text class="sub" x="600" y="1276" text-anchor="middle">learned_dynamics/rollout_evaluate.py</text>
+
+          <rect x="60" y="1310" width="18" height="14" rx="3" class="box learned"/>
+          <text class="sub" x="86" y="1321">öğrenilmiş bileşen (Gemini ya da JEPA)</text>
+          <rect x="330" y="1310" width="18" height="14" rx="3" class="box mech"/>
+          <text class="sub" x="356" y="1321">mekanistik/deterministik hesap</text>
+        </svg>
+      </div>
+      <p style="font-size:0.86rem;color:var(--muted);text-align:center;">
+        Kalın çerçeveli kutular <b>öğrenilmiş</b> (veriden eğitilmiş) bileşenler; ince
+        çerçeveliler <b>mekanistik</b> (fiziğin/farmakolojinin bilinen denklemlerini
+        hesaplayan) bileşenlerdir. JEPA hattı, CircAdapt'in ürettiği veriyle eğitiliyor
+        ama CircAdapt'in KENDİSİNİN yerini almıyor — ayrı, deneysel bir dal.
+      </p>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SECTION 2 -->
+    <!-- ============================================================ -->
+    <section class="chapter" id="s2">
+      <div class="chapter-kicker">Bölüm 02</div>
+      <h2>Hasta Profili Çıkarımı</h2>
+      <p class="intro">
+        Sistemin serbest-metin bir PDF raporunu yapılandırılmış sayısal veriye çevirdiği
+        TEK yer burası — ve sistemin TEK gerçek "öğrenilmiş" karar noktalarından biri
+        (diğeri Bölüm 8'deki JEPA). Mimari prensip nettir: <b>LLM karar verici değil,
+        veri çıkarıcıdır</b> — hiçbir klerens/doz/risk hesaplaması burada yapılmaz.
+      </p>
+
+      <h3 class="q"><span class="qnum">1</span>Ne işe yarıyor</h3>
+      <p>
+        Bir PDF hasta raporunu (serum kreatinin, bilirubin, nabız, tansiyon, elektrolitler,
+        kronik hastalıklar, mevcut ilaçlar gibi) yapılandırılmış, kaynağı-izlenebilir bir
+        veri yapısına (<code>PatientProfile</code>) çevirir. Çıktı, Bölüm 3'teki
+        deterministik formüllerin girdisidir.
+      </p>
+
+      <h3 class="q"><span class="qnum">2</span>Mantık tam olarak nedir</h3>
+      <p>
+        Metin katmanlı PDF'lerde <code>pdfplumber</code> ile metin çıkarılır; sayfa başına
+        50 karakterin altında metin çıkarsa PDF "muhtemelen taranmış" kabul edilip ham
+        PDF byte'ları doğrudan Gemini'ye multimodal girdi olarak verilir (yerel OCR
+        YERİNE — gerekçe: Gemini taranmış belgeleri zaten okuyabiliyor, ayrı bir
+        Tesseract/Poppler bağımlılığı gerektirmiyor, ve OCR hatalarının
+        <code>source_quote</code>'un orijinal cümleyle birebir eşleşmesini bozma riskini
+        ortadan kaldırıyor).
+      </p>
+      <p>
+        Gemini'ye <code>response_schema</code> olarak <code>PatientProfile</code>'ın
+        KENDİSİ değil, sadece <code>core_parameters</code>+<code>flags</code> içeren bir
+        alt-şema (<code>_PatientProfileExtraction</code>) verilir — çünkü
+        <code>extraction_metadata</code> serbest bir <code>dict</code> olduğu için
+        ürettiği JSON şeması <code>additionalProperties: true</code> içeriyor, ve Gemini
+        Developer API (Enterprise/Vertex modu değil) bunu desteklemiyor.
+      </p>
+      <div class="src-ref"><b>llm_extraction.py :: _PatientProfileExtraction, extract_patient_profile_from_pdf_bytes()</b></div>
+
+      <h3 class="q"><span class="qnum">3</span>Veri nereden nereye akıyor</h3>
+      <p>
+        <code>file_ingestion.py</code> (metin/görüntü çıkarma) → <code>llm_extraction.py</code>
+        (Gemini çağrısı, ham JSON) → Pydantic doğrulaması (<code>_PatientProfileExtraction.
+        model_validate_json</code>, hata varsa <code>LLMExtractionError</code> fırlatılır,
+        dosya SESSİZCE kabul edilmez) → kategorik alan normalizasyonu → <code>PatientProfile
+        </code> (+ <code>extraction_metadata</code>: kaynak dosya, model adı, zaman damgası)
+        → <code>validation.py</code> (aralık + tutarlılık kontrolü) → <code>review_data.py</code>
+        (kullanıcı onay ekranı) → SADECE onaylanırsa <code>covariate_mapping.py</code>
+        (Bölüm 3).
+      </p>
+
+      <h3 class="q"><span class="qnum">4</span>Neden bu şekilde tasarlandı</h3>
+      <p>
+        Halüsinasyon (LLM'in var olmayan bir değeri "uydurması") bu sistemde klinik bir
+        risk taşıdığı için, TEK bir savunma katmanına güvenilmiyor — sekiz farklı,
+        birbirinden bağımsız önlem art arda diziliyor. Her biri farklı bir hata sınıfını
+        hedefliyor:
+      </p>
+
+      <div class="risk-grid">
+        <div class="risk-card">
+          <div><div class="risk-head">1 · Null-if-absent</div><span class="tag">prompt kuralı</span></div>
+          <div class="risk-target">Hedeflediği risk:<br/>veri uydurma</div>
+          <div class="risk-detail">Prompt'un 1. kuralı: bilgi metinde açıkça yoksa alan <code>null</code> bırakılır, "muhtemelen normaldir" gibi bir varsayım YASAK.</div>
+        </div>
+        <div class="risk-card">
+          <div><div class="risk-head">2 · source_quote</div><span class="tag">ExtractedField</span></div>
+          <div class="risk-target">Hedeflediği risk:<br/>yanlış atıf / uydurma kaynak</div>
+          <div class="risk-detail">Her değer, çıkarıldığı orijinal cümlenin birebir kopyasıyla birlikte gelir — parafraz YASAK, denetlenebilirlik sağlar.</div>
+        </div>
+        <div class="risk-card">
+          <div><div class="risk-head">3 · confidence</div><span class="tag">high/medium/low</span></div>
+          <div class="risk-target">Hedeflediği risk:<br/>belirsiz veriye aşırı güven</div>
+          <div class="risk-detail">"Kreatinin yüksek" gibi sayısız-belirsiz ifadelerde value=null + confidence="low" — belirsizlik gizlenmiyor.</div>
+        </div>
+        <div class="risk-card">
+          <div><div class="risk-head">4 · Çift-katmanlı normalizasyon</div><span class="tag">prompt + kod</span></div>
+          <div class="risk-target">Hedeflediği risk:<br/>birim/dil uyumsuzluğu</div>
+          <div class="risk-detail">"Erkek"→"male" çevirisi HEM prompt'ta istenir HEM <code>_CATEGORICAL_VALUE_ALIASES</code> ile kodda tekrarlanır — "LLM talimata her zaman birebir uyacağı garanti değil" gerekçesiyle.</div>
+        </div>
+        <div class="risk-card">
+          <div><div class="risk-head">5 · Şema doğrulama</div><span class="tag">Pydantic</span></div>
+          <div class="risk-target">Hedeflediği risk:<br/>bozuk/şema-dışı JSON</div>
+          <div class="risk-detail"><code>ValidationError</code> → <code>LLMExtractionError</code> — dosya "kısmen işlendi" gibi sessizce kabul edilmez, kullanıcı hatayı görür.</div>
+        </div>
+        <div class="risk-card">
+          <div><div class="risk-head">6 · Fizyolojik aralık</div><span class="tag">validation.py</span></div>
+          <div class="risk-target">Hedeflediği risk:<br/>OCR/girdi hatası (yaş=-5, nabız=900)</div>
+          <div class="risk-detail"><code>PHYSIOLOGICAL_RANGES</code> — "normal" değil "mümkün" aralık; veri değiştirilmez, sadece <code>out_of_range</code> etiketlenir.</div>
+        </div>
+        <div class="risk-card">
+          <div><div class="risk-head">7 · Çapraz-alan tutarlılık</div><span class="tag">cross_field</span></div>
+          <div class="risk-target">Hedeflediği risk:<br/>mantıksal çelişki</div>
+          <div class="risk-detail">Örn. <code>sex=male</code> + <code>pregnancy_status=pregnant</code>, ya da EF&lt;%20 ama kronik hastalıkta kalp yetmezliği geçmiyor.</div>
+        </div>
+        <div class="risk-card">
+          <div><div class="risk-head">8 · Kullanıcı onayı</div><span class="tag">review_data.py</span></div>
+          <div class="risk-target">Hedeflediği risk:<br/>körü körüne otomatik uygulama</div>
+          <div class="risk-detail"><code>confirm_and_apply()</code>, <code>ready_to_confirm=True</code> VE <code>user_confirmed=True</code> olmadan <code>apply_patient_covariates()</code>'i ASLA çağırmaz.</div>
+        </div>
+      </div>
+      <div class="src-ref"><b>patient_profile/{schema,llm_extraction,validation,review_data}.py</b></div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SECTION 3 -->
+    <!-- ============================================================ -->
+    <section class="chapter" id="s3">
+      <div class="chapter-kicker">Bölüm 03</div>
+      <h2>Kovaryat Formülleri</h2>
+      <p class="intro">
+        <code>covariate_mapping.py</code>, LLM'den TAMAMEN bağımsız, saf deterministik
+        Python — hiçbir çağrısı Gemini'ye gitmiyor. Klinik laboratuvar değerlerini
+        (kreatinin, bilirubin...) sistemin zaten kullandığı soyut 0-1 skalaya
+        (<code>renal_function</code>/<code>hepatic_function</code>) köprüler.
+      </p>
+
+      <h4 class="sub">Cockcroft-Gault — kreatinin klerensi</h4>
+      <h3 class="q"><span class="qnum">1</span>Ne işe yarar</h3>
+      <p>
+        Böbreğin kanı dakikada ne kadar süzdüğünün (mL/dk) bir tahminini, doğrudan bir
+        böbrek görüntülemesi/24 saatlik idrar toplamadan çok daha ucuz olan tek bir kan
+        tahliliyle (serum kreatinin) verir.
+      </p>
+      <h3 class="q"><span class="qnum">2</span>Formül</h3>
+      <div class="formula-block">
+        \[ \text{CrCl} = \frac{(140 - \text{age}) \times \text{weight}_{kg}}{72 \times \text{serum\_creatinine}} \times \begin{cases}0.85 & \text{kadınsa} \\ 1.0 & \text{aksi halde}\end{cases} \]
+      </div>
+      <p>
+        <b>age</b>: böbrek fonksiyonu yaşla doğal olarak azalır (nefron sayısı azalır) —
+        pay yaş arttıkça küçülür. <b>weight_kg</b>: kas kütlesinin bir vekili (kreatinin
+        kas metabolizmasının yan ürünü) — daha fazla kas, daha fazla kreatinin üretimi
+        demektir, bu formül aynı serum kreatinin seviyesini daha büyük kas kütlesiyle
+        daha yüksek bir klerense çevirir. <b>serum_creatinine</b>: paydada — böbrek ne
+        kadar KÖTÜ süzüyorsa kanda o kadar BİRİKİR, yani yüksek değer düşük klerensi
+        işaret eder. <b>0.85 kadın çarpanı</b>: bu, formülün orijinal 1976 kalibrasyon
+        kohortundaki (Cockcroft &amp; Gault) ortalama kas kütlesi farkını yansıtan
+        klasik bir sabittir — kodun kendisi bu sayı için ayrı bir kaynak belgelemiyor,
+        standart klinik farmakoloji formülünün aynen uygulanmasıdır.
+      </p>
+      <div class="callout warn">
+        <span class="callout-label">Belgelenmiş yaklaşıklık</span>
+        Kod, <code>sex</code> "male"/"female" dışında bir değerse (örn. "unknown") 0.85
+        düzeltmesini UYGULAMAZ (erkek-eşdeğeri varsayılan) — bilinçli, dokümante edilmiş
+        bir basitleştirme.
+      </div>
+      <div class="src-ref"><b>covariate_mapping.py :: cockcroft_gault()</b></div>
+
+      <p>
+        CrCl, sisteme <code>renal_function = max(0, \text{CrCl}/100)</code> ile aktarılır
+        (100 mL/dk = normal fonksiyon referansı, KDIGO/FDA renal-bozukluk kılavuzlarında
+        yaygın kullanılan bir referans). Üst sınırda (renal_function&gt;1) kasıtlı olarak
+        CAP yok — <code>organ_function_adjusted_ke()</code> (Bölüm 4) matematiksel olarak
+        &gt;1 girdiyle de tutarlı çalışıyor.
+      </p>
+      <div class="src-ref"><b>covariate_mapping.py :: crcl_to_renal_function()</b></div>
+
+      <h4 class="sub">Child-Pugh — karaciğer fonksiyon skoru</h4>
+      <p>
+        5 kritere dayanan, ordinal bir skor (5-15 puan). Her kriter aşağıdaki tabloya göre
+        1-3 puan alır, toplam A/B/C sınıfına ayrılır.
+      </p>
+      <table class="datatable">
+        <thead><tr><th>Kriter</th><th>1 puan</th><th>2 puan</th><th>3 puan</th></tr></thead>
+        <tbody>
+          <tr><td>Bilirubin (mg/dL)</td><td>&lt; 2</td><td>2 – 3</td><td>&gt; 3</td></tr>
+          <tr><td>Albümin (g/dL)</td><td>&gt; 3.5</td><td>2.8 – 3.5</td><td>&lt; 2.8</td></tr>
+          <tr><td>INR</td><td>&lt; 1.7</td><td>1.7 – 2.3</td><td>&gt; 2.3</td></tr>
+          <tr><td>Asit (boolean şema)</td><td>yok</td><td colspan="2">var (şiddet ayrımı yok)</td></tr>
+          <tr><td>Ensefalopati derecesi</td><td>0</td><td>1 – 2</td><td>3 – 4</td></tr>
+        </tbody>
+      </table>
+      <div class="callout warn">
+        <span class="callout-label">Kapsam sınırı</span>
+        Standart Child-Pugh, asiti 3 dereceye ayırır (yok/hafif/ağır-refrakter, 1/2/3 puan).
+        Şemamızda sadece boolean <code>ascites_present</code> var — bu yüzden 3 puanlık
+        (ağır) uca hiç ulaşılamıyor, sadece 1 veya 2 verilebiliyor.
+      </div>
+      <p><b>Sınıflandırma:</b> 5-6 puan = A (hafif), 7-9 = B (orta), 10-15 = C (ağır).</p>
+      <div class="src-ref"><b>covariate_mapping.py :: child_pugh_score(), child_pugh_class()</b></div>
+
+      <p>Child-Pugh skoru, parçalı-doğrusal bir enterpolasyonla <code>hepatic_function</code>'a (0-1) eşlenir:</p>
+      <div class="formula-block">
+        \[ \text{hepatic\_function} = \begin{cases}
+        1.0 - (score-5)\times 0.05 & score \le 6 \quad(\text{A: } 1.0 \to 0.95) \\
+        0.7 - (score-7)\times 0.10 & 7 \le score \le 9 \quad(\text{B: } 0.7 \to 0.5) \\
+        \max(0.2,\ 0.4 - (score-10)\times 0.04) & score \ge 10 \quad(\text{C: } 0.4 \to 0.2)
+        \end{cases} \]
+      </div>
+      <div class="callout danger">
+        <span class="callout-label">Literatür-doğrulamalı DEĞİL</span>
+        Bu eşleme, kodun kendi docstring'inin de açıkça belirttiği gibi, literatürde
+        validasyonu olan bir formül değil — Child-Pugh sürekli bir klerens ölçümü değil,
+        ordinal bir skor. Mevcut mimarinin (0-1 skala) beklentisine uyum sağlamak için
+        yapılmış, muhafazakar/belgelenmiş bir yaklaşıklık, klinik kesinlik iddia etmiyor.
+      </div>
+      <div class="src-ref"><b>covariate_mapping.py :: child_pugh_to_hepatic_function()</b></div>
+
+      <h4 class="sub">Allometrik PK ölçekleme</h4>
+      <div class="formula-block">
+        \[ \text{Cl}_{\text{hasta}} = \text{Cl}_{\text{referans}} \times \left(\frac{W_{\text{hasta}}}{W_{\text{referans}}}\right)^{\text{exponent}} \]
+      </div>
+      <p>
+        <code>exponent</code>, klerens için tipik olarak <b>0.75</b> (metabolik hızın vücut
+        büyüklüğüyle ölçeklenmesine dair, türler-arası/vücut-büyüklüğü literatüründeki
+        standart üs — "3/4 kuralı"), dağılım hacmi için <b>1.0</b> (hacim, vücut suyu/
+        büyüklüğüyle kabaca DOĞRUSAL ölçeklenir) kullanılır.
+      </p>
+      <div class="callout warn">
+        <span class="callout-label">Bilinçli olarak OTOMATİK bağlanmadı</span>
+        <code>apply_patient_covariates()</code> bu fonksiyonu ÇAĞIRMAZ — çünkü mevcut
+        <code>Drug</code> modeli zaten <code>vd_per_kg</code>/<code>ke_mean</code>
+        üzerinden per-kg ölçekleniyor (<code>plasma_concentration()</code> içinde
+        <code>vd = vd_per_kg * weight_kg</code>). Otomatik uygulamak, aynı kilo etkisini
+        İKİ KEZ uygulama riski taşırdı (double-scaling). Fonksiyon, ileride bir ilacın
+        parametreleri "referans hastaya göre" (per-kg değil) verilirse (örn. pediatrik
+        ekstrapolasyon) kullanılmak üzere ayrı bir yardımcı olarak duruyor.
+      </div>
+      <div class="src-ref"><b>covariate_mapping.py :: allometric_scale()</b></div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SECTION 4 -->
+    <!-- ============================================================ -->
+    <section class="chapter" id="s4">
+      <div class="chapter-kicker">Bölüm 04</div>
+      <h2>Farmakokinetik (PK) Katmanı</h2>
+      <p class="intro">
+        "İlaç vücutta nasıl dağılır ve temizlenir?" sorusunu cevaplayan katman —
+        <code>src/worldmodel/pk.py</code>. Tüm çözümler <b>kapalı-form</b> (sayısal ODE
+        çözümü değil, doğrudan cebirsel formül) — bu hem hızlı hem de tam olarak
+        doğru (sayısal integrasyon hatası yok).
+      </p>
+
+      <h4 class="sub">Bateman denklemi — tek-kompartmanlı bolus/oral</h4>
+      <div class="formula-block">
+        \[ C(t) = \frac{\text{Dose}}{V_d} \cdot \frac{k_a}{k_a - k_e} \cdot \left(e^{-k_e t} - e^{-k_a t}\right), \quad C(t) \ge 0 \]
+      </div>
+      <p>
+        <b>\(k_a\)</b> (emilim hız sabiti): ilacın kana ne kadar HIZLI karıştığı.
+        <b>\(k_e\)</b> (eliminasyon hız sabiti): ilacın vücuttan ne kadar HIZLI atıldığı.
+        <b>\(V_d\)</b> (dağılım hacmi): ilacın vücutta ne kadar YAYILDIĞI — kiloyla
+        ölçeklenir (<code>vd = vd_per_kg * weight_kg</code>), yani aynı doz farklı
+        kilodaki hastalarda farklı konsantrasyon üretir. Bu, tek-kompartmanlı doğrusal
+        emilim+eliminasyon ODE'sinin standart analitik çözümüdür — sayısal integrasyona
+        gerek yok, hızlı ve tam kesin.
+      </p>
+      <div class="src-ref"><b>pk.py :: plasma_concentration()</b></div>
+
+      <h4 class="sub">İki-kompartmanlı biexponential çözüm — IV bolus</h4>
+      <div class="formula-block">
+        \[
+        \begin{aligned}
+        \alpha,\beta &= \frac{(k_{10}+k_{12}+k_{21}) \pm \sqrt{(k_{10}+k_{12}+k_{21})^2 - 4 k_{10} k_{21}}}{2} \\
+        C_0 &= \text{Dose}/V_c,\quad
+        A = C_0\frac{\alpha-k_{21}}{\alpha-\beta},\quad
+        B = C_0\frac{k_{21}-\beta}{\alpha-\beta} \\
+        C(t) &= A\, e^{-\alpha t} + B\, e^{-\beta t}
+        \end{aligned}
+        \]
+      </div>
+      <p>
+        Bateman'dan farkı: ilaç doğrudan santral (kan) kompartmana enjekte edilir — emilim
+        fazı (\(k_a\)) yok, bunun yerine santral↔periferik doku arasında geçiş var
+        (<b>\(k_{12}\)</b>: santralden periferiğe, <b>\(k_{21}\)</b>: periferikten
+        santrale geri dönüş), santralden eliminasyon var (<b>\(k_{10}\)</b>). Bu yüzden
+        \(t{=}0\)'da konsantrasyon SIFIR DEĞİL, doğrudan \(\text{Dose}/V_c\)'dir — gerçek
+        bir IV bolusun fizyolojik davranışı budur.
+      </p>
+      <div class="src-ref"><b>pk.py :: plasma_concentration_two_compartment()</b></div>
+
+      <h4 class="sub">Sürekli infüzyon</h4>
+      <div class="formula-block">
+        \[
+        \text{Cl} = k_e V_d,\qquad
+        C(t) = \begin{cases}
+        \dfrac{R}{\text{Cl}}\left(1 - e^{-k_e t}\right) & t \le T_{\text{inf}} \\[6pt]
+        C(T_{\text{inf}})\, e^{-k_e (t - T_{\text{inf}})} & t > T_{\text{inf}}
+        \end{cases}
+        \]
+      </div>
+      <p>
+        Standart zero-order (sabit hızlı) giriş + first-order eliminasyon çözümü —
+        kaynak: Rowland &amp; Tozer, <em>Clinical Pharmacokinetics and
+        Pharmacodynamics</em>; Winter, <em>Basic Clinical Pharmacokinetics</em>
+        (kodun kendi docstring'inde açıkça atıfta bulunulan gerçek ders kitapları).
+        \(T_{\text{inf}}\)'de iki dal AYNI değeri verir (ikinci dal, birincinin o andaki
+        değerinden başlar) — bu matematiksel bir süreklilik garantisi, kod içinde test
+        edilmiştir. \(T_{\text{inf}}{=}\)None ise sonsuz infüzyon — \(C(t)\) kararlı-durum
+        \(C_{ss}=R/\text{Cl}\)'ye yakınsar.
+      </p>
+      <div class="src-ref"><b>pk.py :: plasma_concentration_infusion()</b></div>
+
+      <h4 class="sub">Organ fonksiyonuna göre ke ayarı</h4>
+      <div class="formula-block">
+        \[ k_{e,\text{adj}} = k_{e,\text{mean}} \times \Big[(1-f_r-f_h) + f_r \cdot RF + f_h \cdot HF\Big] \]
+      </div>
+      <p>
+        \(f_r,f_h\): ilacın toplam eliminasyonunun böbrek/karaciğer YOLUYLA olan kısmı
+        (0-1). \(RF,HF\): renal/hepatik fonksiyon (1.0=normal, 0=tam yetmezlik). Mantık:
+        eliminasyonun SADECE o organa ait kısmı, organ fonksiyon kaybıyla ORANTILI
+        azalır — geri kalan eliminasyon yolu (örn. esmololün eritrosit esterazlarla
+        metabolizması, böbrek/karaciğerden bağımsız) etkilenmez. \(f_r{=}f_h{=}0\) olan
+        bir ilaçta (esmolol) \(k_e\) organ fonksiyonundan TAMAMEN bağımsız kalır.
+      </p>
+      <div class="src-ref"><b>pk.py :: organ_function_adjusted_ke()</b></div>
+
+      <h4 class="sub">PK-seviyeli ilaç etkileşimi</h4>
+      <div class="formula-block">
+        \[ k_{e,\text{final}} = \frac{k_{e,\text{adj}}}{\text{AUC ratio}} \]
+      </div>
+      <p>
+        AUC (eğri altındaki alan — toplam ilaç maruziyeti) sabit \(V_d\)'de \(1/k_e\) ile
+        orantılıdır. Bir "perpetrator" ilaç victim'ın AUC'sini X katına çıkarıyorsa, bu
+        matematiksel olarak \(k_e\)'yi aynı oranda AZALTMAKLA eşdeğerdir. Gerçek örnek:
+        esmolol, digoksinin P-glikoprotein aracılı atılımını inhibe ederek AUC'sini
+        <b>1.11 katına</b> çıkarır (Kessler ve ark. 1987, 11 sağlıklı erkek gönüllü,
+        digoksin AUC'si 2.60→2.88 ng·saat/mL, p&lt;0.05, PubMed 2888792 — kodun kendi
+        veri dosyasında atıfta bulunulan gerçek bir kaynak).
+      </p>
+      <div class="src-ref"><b>pk.py :: pk_interaction_adjusted_ke() · configs/drug_pk_interactions.yaml</b></div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SECTION 5 -->
+    <!-- ============================================================ -->
+    <section class="chapter" id="s5">
+      <div class="chapter-kicker">Bölüm 05</div>
+      <h2>Farmakodinamik (PD) Katmanı</h2>
+      <p class="intro">
+        "Bu konsantrasyon, vücutta ne kadar etki yapar?" sorusunu cevaplayan katman —
+        <code>src/worldmodel/pd.py</code>.
+      </p>
+
+      <h4 class="sub">Emax / Hill denklemi</h4>
+      <div class="formula-block">
+        \[ \text{effect\_fraction} = \text{clip}\left(\text{sensitivity} \times \frac{C}{EC_{50} + C},\ 0,\ 1.3\right) \]
+      </div>
+      <p>
+        <b>\(EC_{50}\)</b>: yarı-maksimum etki için gereken konsantrasyon. <b>sensitivity</b>:
+        bireysel duyarlılık çarpanı (Monte Carlo'da rastgele örneklenir, Bölüm 7). Bu,
+        genel Hill denkleminin (\(E = E_{max} \cdot C^n/(EC_{50}^n+C^n)\)) Hill katsayısı
+        \(n{=}1\) özel halidir — kod ayrı bir Hill üssü parametresi TAŞIMIYOR, her zaman
+        basit hiperbolik satürasyon kullanıyor. Üst sınır 1.3'e (nominal maksimumun biraz
+        üzerine) clip'leniyor — yüksek duyarlılıklı (sensitivity&gt;1) hastalarda
+        formülün &gt;1 üretebilmesine izin veren gevşek bir tavan; kod bu spesifik 1.3
+        değeri için ayrıca bir gerekçe belgelemiyor.
+      </p>
+      <div class="src-ref"><b>pd.py :: emax_effect()</b></div>
+
+      <h4 class="sub">Elektrolit-ayarlı Emax</h4>
+      <div class="formula-block">
+        \[
+        k_{K^+} = 1.0 + 0.3 \max(0,\ K^+ - 5.0), \qquad
+        k_{Ca^{2+}} = 1.0 + 0.08\,(Ca^{2+} - 9.5)
+        \]
+      </div>
+      <p>
+        <b>Potasyum → AV iletim</b>: hiperkalemi kalp iletim sistemini (AV düğümü/His-Purkinje)
+        yavaşlatır — azalan dinlenim membran potansiyeli, azalan Na⁺ kanalı
+        kullanılabilirliği (gerçek, iyi bilinen fizyoloji). Normal aralıkta (3.5-5.0 mEq/L)
+        etki yok. <b>Kalsiyum → kontraktilite</b>: eksitasyon-kontraksiyon kenetlenmesinde
+        doğrudan rol oynar. Her ikisinin de EĞİMİ (0.3 ve 0.08) ⚠️ <b>temsilidir</b> — yön
+        gerçek fizyoloji, kesin sayı bir doz-yanıt çalışmasından kalibre edilmedi.
+      </p>
+      <div class="callout accent">
+        <span class="callout-label">Gerçek vaka motivasyonu</span>
+        Bu fonksiyon, önceden istatistiksel Monte Carlo motorunun hastanın potasyum
+        düzeyinden TAMAMEN BAĞIMSIZ çalıştığı bir tutarlılık boşluğunu kapatıyor —
+        CALIBRATION_REPORT.md §5'te belgelenen gerçek bir vaka raporu (82 yaşında,
+        hafif hiperkalemik [K=4.90] bir hastada digoksin+beta-bloker kombinasyonunun
+        tam AV bloğuna yol açması), hiperkalemik hastaların AV-düğümü-hedefli ilaçlara
+        DAHA DUYARLI olması gerektiğini gösterdi.
+      </div>
+      <div class="src-ref"><b>pd.py :: electrolyte_adjusted_emax_hr/_sbp(), potassium_av_conduction_factor(), calcium_contractility_factor()</b></div>
+
+      <h4 class="sub">Loewe additivity — çoklu ilaç kombinasyonu</h4>
+      <div class="formula-block">
+        \[ \sum_i \frac{C_i \,(E_{max,i} - e)}{EC_{50,i}\, e} = 1 \]
+      </div>
+      <p>
+        Farklı ilaçların Emax'ları FARKLIYSA (örn. esmolol emax_hr=25, digoksin
+        emax_hr=15), etkilerini doğrudan toplamak/çarpmak yanıltıcı olabilir ("eğrisel
+        izobol" sorunu, bkz. Tallarida, <em>Quantitative Methods for Assessing Drug
+        Synergism</em>). Bu denklemin \(e\) (birleşik etki) için kapalı-form çözümü yok
+        (N=1 hariç) — ama sol taraf \(e\)'nin MONOTON AZALAN bir fonksiyonu olduğu için
+        <b>bisection</b> (ikiye bölme, 40 iterasyon) ile güvenle çözülüyor.
+      </p>
+      <div class="callout warn">
+        <span class="callout-label">Bilinen kapsam sınırı</span>
+        Bu formül birleşik etkiyi \(\min(E_{max,i})\) ile sınırlıyor — yüksek tavanlı bir
+        ilaç, düşük tavanlı ortağıyla birleşince o düşük tavanı MATEMATİKSEL OLARAK
+        aşamıyor (Grabovsky-Tallarida'nın tam-agonist/kısmi-agonist ayrımı bu sınırı
+        kaldırır ama önemli ölçüde daha karmaşık). Ayrıca TÜM ilaçların Emax'ı AYNI
+        YÖNDE olmalı — zıt yönlü kombinasyonlar (beta-bloker + vazodilatörün refleks
+        taşikardisi gibi) bu izobol modeline uymuyor.
+      </div>
+      <div class="src-ref"><b>pd.py :: loewe_combined_effect()</b></div>
+
+      <h4 class="sub">Discrete (kesikli) AV blok</h4>
+      <p>
+        Sürekli \(c\_tau\_av1\) çarpanı belirli bir eşiği aşınca, CircAdapt'in kendisi
+        sayısal olarak ÇÖKÜYOR (izole deneyle doğrulandı: 2x'te görünür fark yok, 5x'te
+        gerçek fark var, 10x'te <code>ModelCrashed</code>). Bu yüzden "sürekli büyüyen
+        gecikme" yerine belli bir noktadan sonra iletim TAMAMEN KESİLİR modelleniyor
+        (klinikte: tam/3. derece AV blok).
+      </p>
+      <table class="datatable">
+        <tbody>
+          <tr><td><code>AV_BLOCK_THRESHOLD_MULTIPLIER = 3.0</code></td><td>İzole deneyde gözlemlenen en düşük çöküş sınırının (5.0x) ALTINDA bir güvenlik payı — hasta-arası değişkenlik nedeniyle "çöküşün hemen altı" güvenli sayılmadı.</td></tr>
+          <tr><td><code>AV_BLOCK_ESCAPE_RHYTHM_HR = 35.0</code></td><td>İdioventriküler kaçış ritmi — standart kardiyoloji literatüründe 20-40 bpm aralığı kabul edilir, 35 bu aralığın temsili orta noktası. ⚠️ Vaka-özel bir ölçümden gelmiyor.</td></tr>
+        </tbody>
+      </table>
+      <p>
+        Mandal (latch) davranışı: eşik aşıldığı İLK noktadan itibaren TÜM sonraki
+        noktalar kaçış ritmine sabitlenir — klinikte AV bloğunun anlık açılıp kapanan
+        değil, bir kez tetiklenip kademeli düzelen bir durum olması gerekçesiyle.
+      </p>
+      <div class="src-ref"><b>pd.py :: discrete_av_block_mask(), av_conduction_cumulative_multiplier()</b></div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SECTION 6 -->
+    <!-- ============================================================ -->
+    <section class="chapter" id="s6">
+      <div class="chapter-kicker">Bölüm 06</div>
+      <h2>CircAdapt — Organ Mekaniği</h2>
+      <p class="intro">
+        VanOsta2024 modeli — kalp-damar sistemini gerçek basınç-hacim-akım fiziğiyle
+        simüle eden, derlenmiş bir C++ ODE çözücüsü.
+      </p>
+
+      <h3 class="q"><span class="qnum">1</span>Ne işe yarar</h3>
+      <p>
+        0D <b>lumped-parameter</b> ("toplanmış parametre") model: kalp ve damar sistemi,
+        3 boyutlu bir akışkan-yapı simülasyonu yerine, birbirine bağlı küçük sayıda
+        kompartmana (kalp boşlukları, atardamar/toplardamar segmentleri) indirgenir — her
+        biri elektrik devresi benzetmesiyle düşünülebilir (basınç~voltaj, akım~akım,
+        direnç/kompliyans~devre elemanları). Uzamsal olarak çözümlenmiyor, ama tüm-sistem
+        hemodinamiğini interaktif simülasyona yetecek hızda yakalıyor.
+      </p>
+
+      <h3 class="q"><span class="qnum">2</span>Hastaya/ilaca göre nasıl ayarlanıyor</h3>
+      <table class="datatable">
+        <thead><tr><th>Mekanizma</th><th>CircAdapt parametresi</th><th>Fonksiyon</th></tr></thead>
+        <tbody>
+          <tr><td>Hastanın kendi bazal nabzı</td><td><code>General.t_cycle</code></td><td><code>calibrate_circadapt_to_patient()</code></td></tr>
+          <tr><td>Potasyum → AV iletim gecikmesi</td><td><code>Timings.c_tau_av1</code></td><td><code>apply_patient_electrolytes_to_circadapt()</code></td></tr>
+          <tr><td>Kalsiyum → kontraktilite</td><td><code>Patch.Sf_act</code></td><td><code>apply_patient_electrolytes_to_circadapt()</code></td></tr>
+          <tr><td>İlaç → nabız</td><td><code>General.t_cycle</code></td><td><code>apply_drug_effect_to_circadapt()</code></td></tr>
+          <tr><td>Beta-bloker/inotrop → kontraktilite + AV</td><td><code>Patch.Sf_act</code>, <code>Timings.c_tau_av1</code></td><td><code>apply_drug_effect_to_circadapt()</code></td></tr>
+          <tr><td>Vazodilatör → sistemik direnç</td><td><code>ArtVen.p0[0]</code></td><td><code>apply_drug_effect_to_circadapt()</code></td></tr>
+          <tr><td>Kalp yetmezliği (komorbidite)</td><td><code>Patch.Sf_act</code> ×0.6</td><td><code>apply_comorbidity_to_circadapt()</code></td></tr>
+          <tr><td>Hipertansiyon (komorbidite)</td><td><code>ArtVen.p0[0]</code> ve <code>PFC.p0</code> ×1.3</td><td><code>apply_comorbidity_to_circadapt()</code></td></tr>
+        </tbody>
+      </table>
+      <p>
+        Tüm ilaç/elektrolit etkileri MUTLAK değil GÖRELİ (fraksiyonel) uygulanıyor —
+        CircAdapt'in mutlak nabız/tansiyonu hasta profiliyle birebir kalibre olmadığı
+        için, sadece İLACIN YARATTIĞI ORANSAL DEĞİŞİM aktarılıyor.
+      </p>
+      <div class="src-ref"><b>integrate_drug_with_circadapt.py</b></div>
+
+      <h3 class="q"><span class="qnum">3</span>Veri akışı</h3>
+      <p>
+        <code>run_baseline(patient)</code> → hasta elektrolit/komorbidite ayarlanmış,
+        ilaçsız <code>VanOsta2024()</code> modeli, <code>stable=True</code> ile
+        yakınsatılmış → <code>run_with_drug(patient, drug, drug_effect)</code> → aynı
+        kalibrasyon + ilaç fraksiyonel etkisi → <code>lv_pressure_volume(model)</code>
+        → sol karıncık basınç/hacim eğrileri (mmHg, mL, ms) → <code>clinical_metrics.py</code>
+        (EF, CO hesaplama) → Streamlit görselleştirme VE Bölüm 8'in ham veri kaynağı.
+      </p>
+
+      <h3 class="q"><span class="qnum">4</span>Neden bu bir "öğrenilmiş model" DEĞİL</h3>
+      <div class="callout accent">
+        <span class="callout-label">Mekanistik vs öğrenilmiş ayrımı</span>
+        CircAdapt, sabit bir fizik/ODE denklem sistemidir — her koşumda SAYISAL OLARAK
+        ÇÖZÜLÜR, hiçbir parametresi veriden ÖĞRENİLMEZ, gradyan inişi yok, eğitim kümesi
+        yok. Girdiler (hasta parametreleri, ilaç kaynaklı parametre kaymaları) verildiğinde,
+        bilinen fiziksel denklemleri çözerek çıktı üretir — veriye örüntü-eşleme yaparak
+        DEĞİL. Bu, Bölüm 8'deki JEPA dünya modeliyle temel farkı: JEPA GERÇEKTEN öğrenilmiş
+        — CircAdapt'in ÜRETTİĞİ veriyle, geri-yayılım (backprop) ile eğitilerek CircAdapt'in
+        davranışını, altındaki denklemleri hiç bilmeden, örtük olarak yaklaşıklıyor.
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SECTION 7 -->
+    <!-- ============================================================ -->
+    <section class="chapter" id="s7">
+      <div class="chapter-kicker">Bölüm 07</div>
+      <h2>Monte Carlo ve Popülasyon Simülasyonu</h2>
+      <p class="intro">
+        <code>simulation.py</code> — <code>patient.py</code>+<code>pk.py</code>+<code>pd.py</code>'yi
+        bir araya getiren "orkestra şefi" katmanı: tek bir hasta+ilaç kombinasyonunu
+        YÜZLERCE kez çalıştırıp gerçekçi bir sonuç DAĞILIMI üretir.
+      </p>
+
+      <h3 class="q"><span class="qnum">1-2</span>Hasta-hasta varyasyonu nasıl örnekleniyor</h3>
+      <p>
+        Varsayılan <code>n_realizations=300</code> deneme. Her denemede:
+      </p>
+      <div class="formula-block">
+        \[ \text{sensitivity} \sim \text{LogNormal}(0,\ 0.30), \qquad k_e \sim k_{e,\text{adj}} \times \text{LogNormal}(0,\ 0.25) \]
+      </div>
+      <p>
+        <b>Neden log-normal (normal değil)</b>: PK parametreleri (hızlar, klerensler)
+        kesinlikle pozitiftir ve popülasyon varyasyonunda tipik olarak sağa-çarpıktır —
+        log-normal, popülasyon-PK (NONMEM tarzı) modellemede bu tür parametreler için
+        standart dağıtımsal varsayımdır (çarpımsal varyasyon); normal dağılım negatif/
+        fizyolojik olmayan değerler üretebilirdi. Ardından ölçüm gürültüsü eklenir
+        (\(\mathcal{N}(0, 1.2)\) bpm HR için, \(\mathcal{N}(0, 1.5)\) mmHg SBP için —
+        gerçek monitörler de mükemmel değildir), ve <code>discrete_av_block</code>
+        maskesi uygulanır.
+      </p>
+      <p>
+        <code>keo_hr</code>/<code>keo_sbp</code> tanımlıysa (bkz. Bölüm 5,
+        <code>effect_compartment_concentration</code>), nabız ve tansiyon FARKLI etki
+        bölgesi gecikmeleriyle hesaplanır — gerçekte bir ilacın iki etkisi aynı anda
+        tepe yapmaz.
+      </p>
+      <div class="src-ref"><b>simulation.py :: run_monte_carlo()</b></div>
+
+      <p>Risk eşiği, her denemenin MİNİMUM nabzından hesaplanır:</p>
+      <div class="formula-block">
+        \[ \text{pct\_bradycardia\_risk} = \frac{|\{i : \min_t \text{hr}_i(t) < 50\}|}{n_{\text{realizations}}} \times 100 \]
+      </div>
+      <div class="src-ref"><b>simulation.py :: summarize()</b></div>
+
+      <h3 class="q"><span class="qnum">3</span>Doz önerisi — neden grid-scan, neden bisection değil</h3>
+      <p>
+        <code>recommend_dose()</code>, <code>dose_min_mg</code>–<code>dose_max_mg</code>
+        aralığında <code>n_candidates=20</code> eşit aralıklı doz adayı tarar, her biri
+        için <code>n_realizations=200</code> ile tam Monte Carlo çalıştırır, ve risk
+        eşiğinde (varsayılan %5) kalan EN YÜKSEK dozu önerir (hiçbiri güvenli değilse
+        en düşük riskli olanı).
+      </p>
+      <div class="callout accent">
+        <span class="callout-label">Tasarım kararı</span>
+        Risk-doz ilişkisi teorik olarak monoton olsa da, Monte Carlo örneklemesinin
+        GÜRÜLTÜSÜ (özellikle sınırlı <code>n_realizations</code>'ta) bisection'ın
+        gerektirdiği kesin monotonluk varsayımını bozabilir. Grid-scan + "en yüksek
+        güvenli aday" seçimi buna karşı DAHA SAĞLAM, ve klinisyene gösterilebilecek TAM
+        doz-yanıt eğrisini bedavaya (ek maliyetsiz) üretir. Aynı gerekçe
+        <code>recommend_polypharmacy_dose_scale()</code> için de geçerli.
+      </div>
+      <p>
+        <code>circadapt_results</code> verilirse (CircAdapt zaten çalıştırılmışsa),
+        istatistiksel öneri AYRICA CircAdapt'in <b>mekanik</b> riskiyle (LVEDV baseline'a
+        göre %20'den fazla artışı — aşırı önyük/preload riski, Frank-Starling
+        mekanizması) çapraz kontrol edilir; mekanik risk varsa doz
+        <code>conservative_dose_factor=0.7</code> ile aşağı çekilir.
+        <code>polypharmacy_result</code> verilirse, kombinasyon riski TEK BAŞINA riskin
+        1.5 katından fazlaysa "tehlikeli kombinasyon" uyarısı eklenir (dozu OTOMATİK
+        değiştirmez — hangi ilacın azaltılacağı klinik bir karar).
+      </p>
+      <div class="src-ref"><b>simulation.py :: recommend_dose(), recommend_polypharmacy_dose_scale()</b></div>
+      <div class="callout warn">
+        <span class="callout-label">Dürüstlük notu</span>
+        <code>dose_min_mg=1.0</code>/<code>dose_max_mg=20.0</code> ve
+        <code>scale_min=0.1</code>/<code>scale_max=3.0</code> gibi tarama sınırları,
+        HİÇBİR sayısal/klinik gerekçeye dayanmayan, keyfi tarama pencereleridir —
+        klinik bir doz tavanı/tabanı iddia etmezler.
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SECTION 8 -->
+    <!-- ============================================================ -->
+    <section class="chapter" id="s8">
+      <div class="chapter-kicker">Bölüm 08</div>
+      <h2>JEPA Dünya Modeli</h2>
+      <p class="intro">
+        Sistemin GERÇEKTEN öğrenilmiş, deneysel dalı — CircAdapt'in atım-atım
+        ürettiği trajectory'lerden, kalbin bir sonraki anını "hayal edebilen" bir
+        model eğitmeye çalışıyor.
+      </p>
+
+      <h4 class="sub">State/action temsili — 215 boyut</h4>
+      <p>Durum vektörü (transient/atım-atım varyantı):</p>
+      <div class="formula-block">
+        \[ \text{state} = \underbrace{[p_1,\ldots,p_{100}]}_{\text{LV basıncı}} \oplus \underbrace{[v_1,\ldots,v_{100}]}_{\text{LV hacmi}} \oplus \underbrace{[\text{14 kovaryat}]}_{\text{yaş, kilo, K}^+\text{,...}} \oplus \underbrace{[\text{HR}_t]}_{\text{o anki nabız}} \in \mathbb{R}^{215} \]
+      </div>
+      <p>
+        14 kovaryat = 11 sürekli (yaş, kilo, boy, bazal HR/SBP/DBP/SpO2, renal/hepatic
+        function, K⁺, Ca²⁺) + 3 kategorik one-hot (komorbidite: none/heart_failure/
+        hypertension). Anlık nabız (<code>current_hr</code>) ayrı bir boyut olarak
+        eklendi çünkü <code>resample_trajectory()</code> zaman eksenini kendi döngü
+        FRAKSİYONUNA normalize ediyor — döngü SÜRESİNİN (dolayısıyla nabzın) mutlak
+        büyüklüğü eğrinin şeklinden kayboluyor, ve nabız transient rejimde her karede
+        değişiyor. Aksiyon = o karenin ilaç konsantrasyonu (1 boyut).
+      </p>
+      <div class="src-ref"><b>state_repr.py :: build_state_vector(), TRANSIENT_STATE_DIM</b></div>
+
+      <h4 class="sub">Mimari — Encoder / Predictor / Target-Encoder</h4>
+      <ul>
+        <li><b>Encoder</b>: 215-boyutlu durumu 64-boyutlu bir "embedding"e (soyut temsile) sıkıştırır, 3-katmanlı MLP (128 gizli birim), gradyanla eğitilir.</li>
+        <li><b>Predictor</b>: [embedding, aksiyon] alıp bir FARK tahmin eder — "sonraki embedding" değil, "embedding NE KADAR değişecek".</li>
+        <li><b>Target-Encoder</b>: Encoder ile AYNI mimari, ama backprop ile DEĞİL, online Encoder'ın ağırlıklarının hareketli ortalamasıyla güncellenir, bu dala gradyan HİÇ akmaz (<i>stop-gradient</i>).</li>
+      </ul>
+      <div class="formula-block">
+        \[
+        \text{embedding}_{t+1} = \text{embedding}_t + \text{Predictor}(\text{embedding}_t, \text{action}_t)
+        \]
+        \[
+        \theta_{\text{target}} \leftarrow m\, \theta_{\text{target}} + (1-m)\, \theta_{\text{online}}, \qquad m = 0.99
+        \]
+      </div>
+      <div class="callout danger">
+        <span class="callout-label">Karşılaşılan sorun ve çözümü — embedding çökmesi</span>
+        Predictor başlangıçta DOĞRUDAN "sonraki embedding"i tahmin edecek şekilde
+        tasarlanmıştı. Aksiyon zayıfken (düşük ilaç konsantrasyonu), MSE kaybını
+        minimize eden en güvenli strateji eğitim kümesinin ORTALAMA sonraki-embedding'ine
+        yakınsamaktı — model hastadan bağımsız SABİT bir noktaya "çöktü". Delta-tahmine
+        geçince aynı durumda en kolay çözüm delta≈0 ("durum değişmedi") oldu — bu
+        FİZİKSEL OLARAK DOĞRU davranışla örtüştüğü için modelin rastgele bir ortalamaya
+        savrulmasını yapısal olarak önledi. Ölçülen etki (tek-adımlı MVP): EF R² 0.445→0.900,
+        HR R² 0.477→0.778, EDV R² 0.139→0.826, ESV R² 0.248→0.925.
+      </div>
+      <div class="src-ref"><b>model.py :: predict_next_embedding(), update_target_encoder()</b></div>
+
+      <h4 class="sub">Kayıp fonksiyonu ve otoregresif rollout</h4>
+      <p>
+        Tek-adım kaybı: \(\mathcal{L} = \text{MSE}(\text{embedding}_{t+1}^{\text{tahmin}},\ \text{TargetEncoder}(\text{state}_{t+1}))\) —
+        bir hafif varyans-cezası terimiyle (VICReg'den esinlenen, embedding boyutlarının
+        std'sini bir alt eşiğin üzerinde tutmaya zorlayan) desteklenir.
+      </p>
+      <p>
+        Otoregresif rollout değerlendirmesi (<code>rollout_evaluate.py</code>): sadece
+        \(t{=}0\)'ın GERÇEK embedding'inden başlanır, her adımda modelin KENDİ ürettiği
+        tahmin bir sonraki adımın girdisi yapılır (gerçek veri araya HİÇ karışmaz).
+        Bu, tek-adım val_loss'unun ölçmediği bir hatayı ortaya çıkardı: hata adım
+        adım BİRİKİYOR (compounding error). <code>finetune_rollout.py</code>, dondurulmuş
+        bir target-encoder'a karşı K-adımlık otoregresif rollout üzerinden ince-ayar
+        yaparak bunu hafifletmeye çalışıyor.
+      </p>
+      <div class="src-ref"><b>rollout_evaluate.py, finetune_rollout.py</b></div>
+
+      <h4 class="sub">Deney serisi — veri ölçeği, ince-ayar, kapasite</h4>
+      <table class="datatable">
+        <thead><tr><th>Deney</th><th>Sonuç</th><th>Neden (mekanizma düzeyinde)</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Veri 260→1560 trajectory (6×)</td>
+            <td class="num" style="color:var(--accent);font-weight:700;">İşe yaradı</td>
+            <td>var(tahmin)/var(gerçek) oranı 0.06→1.07'ye çıktı (EDV) — model artık hastalar arası GERÇEK farklılığı öğreniyor, ortalamaya kaçmıyor. Yön hatası %53-75'ten tek haneli yüzdelere düştü.</td>
+          </tr>
+          <tr>
+            <td>Çok-adımlı ince-ayar (1560 veride)</td>
+            <td class="num" style="color:var(--muted);">Katkısız/hafif zararlı</td>
+            <td>3a (temel eğitim) tek başına zaten R²=0.93-0.99 veriyor — düzeltecek bir "rollout patlaması" kalmamıştı; az sayıda tam-uzunluklu trajectory üzerinde yakınsamış temsili gereksiz bozdu.</td>
+          </tr>
+          <tr>
+            <td>hidden_dim 128→256</td>
+            <td class="num" style="color:var(--danger);font-weight:700;">İşe yaramadı</td>
+            <td>Tüm metriklerde marjinal kötüleşme + tohumlar arası varyans 2-4× büyüdü — darboğaz temsil kapasitesi değildi, "kapasite artışı" hipotezi bu ölçümle çürütüldü.</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="src-ref"><b>logs/SUMMARY_1560.md (bu oturumun deney günlüğü)</b></div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SECTION 9 -->
+    <!-- ============================================================ -->
+    <section class="chapter" id="s9">
+      <div class="chapter-kicker">Bölüm 09</div>
+      <h2>Her Şeyin Birleştiği Yer — Uçtan Uca Yürüyüş</h2>
+      <p class="intro">
+        Aşağıdaki adımlar, GERÇEK kod çalıştırılarak üretilen gerçek ara-değerlerdir
+        (<code>python -c "..."</code> ile <code>covariate_mapping.py</code>/<code>pk.py</code>/
+        <code>pd.py</code> içindeki fonksiyonlar doğrudan çağrıldı). Tek istisna: 1. adımdaki
+        "PDF'ten çıkan kreatinin değeri" — gerçek bir Gemini API çağrısı yapılmadı (API
+        anahtarı gerektirir), bu tek girdi <b>temsili</b> olarak varsayıldı. Hasta A'nın
+        diğer tüm temel değerleri (<code>configs/patients.yaml</code>) ve ilaç
+        parametreleri (<code>configs/drugs.yaml</code>, esmolol) gerçek proje
+        konfigürasyonundan alındı.
+      </p>
+
+      <div class="callout warn">
+        <span class="callout-label">Temsili girdi</span>
+        Hasta A, 45 yaş, erkek, 76 kg, bazal nabız 78 bpm, bazal SBP 125 mmHg (gerçek
+        <code>configs/patients.yaml</code>). "PDF'ten çıkarıldığı varsayılan" serum
+        kreatinin: <b>2.1 mg/dL</b> (böbrek fonksiyonu hafif-orta bozuk bir senaryo
+        göstermek için seçildi — gerçek bir rapordan gelmiyor).
+      </div>
+
+      <div class="walkthrough-step">
+        <div class="wnum">1</div>
+        <div class="wcontent">
+          <h4>Cockcroft-Gault → renal_function</h4>
+          <p>
+            \( \text{CrCl} = \dfrac{(140-45)\times 76.0}{72\times 2.1} = \mathbf{47.75\ mL/dk} \)
+            &nbsp;→&nbsp; \( \text{renal\_function} = 47.75/100 = \mathbf{0.4775} \)
+          </p>
+        </div>
+      </div>
+
+      <div class="walkthrough-step">
+        <div class="wnum">2</div>
+        <div class="wcontent">
+          <h4>organ_function_adjusted_ke (esmolol)</h4>
+          <p>
+            Esmolol için <code>renal_clearance_fraction=0.0</code> (kan enzimleriyle
+            metabolize olur, böbrekten bağımsız) — bu yüzden \(k_e\) böbrek fonksiyonundan
+            ETKİLENMEZ: \(k_{e,\text{adj}} = 4.6 \times [(1-0-0) + 0\times 0.4775] = \mathbf{4.6000}\)
+            (değişmedi).
+          </p>
+          <p style="font-size:0.86rem;color:var(--muted);">
+            Pedagojik karşılaştırma (aynı gerçek fonksiyon, VARSAYIMSAL bir parametreyle):
+            ilaç %50 böbrekten atılsaydı (<code>renal_clearance_fraction=0.5</code>),
+            \(k_{e,\text{adj}} = 4.6\times[0.5 + 0.5\times 0.4775] = \mathbf{3.398}\) —
+            yani böbrek bozukluğu, sadece o organa bağımlı ilaçlarda \(k_e\)'yi düşürür.
+          </p>
+        </div>
+      </div>
+
+      <div class="walkthrough-step">
+        <div class="wnum">3</div>
+        <div class="wcontent">
+          <h4>plasma_concentration (Bateman) — ilk 2 saat</h4>
+          <table class="datatable">
+            <thead><tr><th class="num">t (saat)</th><th class="num">C (mg/L)</th></tr></thead>
+            <tbody>
+              <tr><td class="num">0.00</td><td class="num">0.0000</td></tr>
+              <tr><td class="num">0.50</td><td class="num"><b>0.0321</b> (pik)</td></tr>
+              <tr><td class="num">1.00</td><td class="num">0.0032</td></tr>
+              <tr><td class="num">1.50</td><td class="num">0.0003</td></tr>
+              <tr><td class="num">2.00</td><td class="num">0.0000</td></tr>
+            </tbody>
+          </table>
+          <p style="font-size:0.86rem;color:var(--muted);">
+            (<code>dose_mg_per_kg=0.5, ka=21.0, vd_per_kg=2.0</code> — hepsi
+            <code>configs/drugs.yaml</code>'daki gerçek esmolol parametreleri.)
+          </p>
+        </div>
+      </div>
+
+      <div class="walkthrough-step">
+        <div class="wnum">4</div>
+        <div class="wcontent">
+          <h4>emax_effect + apply_effect_to_vitals</h4>
+          <p>
+            \( \text{effect\_fraction} = \dfrac{0.0321}{0.737 + 0.0321} = \mathbf{0.0417} \)
+          </p>
+          <p>
+            \( \text{HR} = 78.0 - 25\times 0.0417 = \mathbf{76.96\ bpm} \) &nbsp;·&nbsp;
+            \( \text{SBP} = 125.0 - 20\times 0.0417 = \mathbf{124.17\ mmHg} \)
+          </p>
+          <p style="font-size:0.86rem;color:var(--muted);">
+            Bu iki sayı, Bölüm 6'daki <code>hr_fraction</code>/<code>sbp_fraction</code>
+            olarak CircAdapt'e (<code>General.t_cycle</code>, <code>Patch.Sf_act</code>,
+            <code>Timings.c_tau_av1</code>) aktarılır — sonraki adım (LV basınç-hacim
+            eğrisi) bu oturumda çalıştırılmadı, akış Bölüm 6'da anlatılan mekanizmanın
+            aynısı.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SECTION 10 — GLOSSARY -->
+    <!-- ============================================================ -->
+    <section class="chapter" id="s10">
+      <div class="chapter-kicker">Bölüm 10</div>
+      <h2>Sözlük</h2>
+      <p class="intro">Sayfada geçen teknik terimlerin kısa tanımları.</p>
+
+      <dl class="glossary-grid">
+        <div class="glossary-item"><dt>EC50 <span class="en">half-maximal effective concentration</span></dt><dd>Yarı-maksimum etki için gereken ilaç konsantrasyonu.</dd></div>
+        <div class="glossary-item"><dt>Emax <span class="en">maximum effect</span></dt><dd>İlacın yapabileceği maksimum etkinin büyüklüğü — konsantrasyon sonsuza giderken etki bu tavana yaklaşır.</dd></div>
+        <div class="glossary-item"><dt>Hill katsayısı</dt><dd>Doz-yanıt eğrisinin ne kadar "keskin" (S-şeklinde) olduğunu belirleyen üs; bu projede her yerde =1 (basit hiperbolik satürasyon).</dd></div>
+        <div class="glossary-item"><dt>Klerens <span class="en">clearance</span></dt><dd>Birim zamanda ilacın tamamen temizlendiği kabul edilen kan/plazma hacmi.</dd></div>
+        <div class="glossary-item"><dt>Dağılım hacmi (Vd)</dt><dd>İlacın vücutta ne kadar yayıldığının teorik ölçüsü — gerçek bir anatomik hacim değil.</dd></div>
+        <div class="glossary-item"><dt>AUC <span class="en">area under the curve</span></dt><dd>Konsantrasyon-zaman eğrisinin altındaki alan — toplam ilaç maruziyetinin ölçüsü.</dd></div>
+        <div class="glossary-item"><dt>Lumped-parameter model</dt><dd>Uzamsal olarak dağılmış bir fiziksel sistemi, sonlu sayıda birbirine bağlı kompartmana indirgeyen modelleme yaklaşımı (bkz. CircAdapt).</dd></div>
+        <div class="glossary-item"><dt>Embedding</dt><dd>Yüksek boyutlu bir girdinin (durum vektörü), sinir ağının öğrendiği düşük boyutlu, soyut bir sayısal temsili.</dd></div>
+        <div class="glossary-item"><dt>Stop-gradient</dt><dd>Bir sinir ağı dalına geri-yayılımın (gradyanın) bilinçli olarak akıtılmaması — JEPA'da çökmeyi önleyen mekanizmalardan biri.</dd></div>
+        <div class="glossary-item"><dt>EMA <span class="en">exponential moving average</span></dt><dd>Bir değerin geçmiş değerlerinin üstel olarak azalan ağırlıklarla ortalaması — target-encoder ağırlıklarını yavaşça güncellemek için kullanılır.</dd></div>
+        <div class="glossary-item"><dt>Otoregresif <span class="en">autoregressive</span></dt><dd>Bir modelin kendi ürettiği çıktıyı, bir sonraki adımın girdisi olarak kullanması.</dd></div>
+        <div class="glossary-item"><dt>Bisection <span class="en">ikiye bölme</span></dt><dd>Monoton bir fonksiyonun kökünü, aralığı sürekli ikiye bölerek bulan sayısal yöntem.</dd></div>
+        <div class="glossary-item"><dt>Log-normal dağılım</dt><dd>Logaritması normal dağılıma uyan, her zaman pozitif değerler üreten olasılık dağılımı — pozitif PK parametreleri için tipik.</dd></div>
+        <div class="glossary-item"><dt>Kreatinin klerensi (CrCl)</dt><dd>Böbreğin kanı dakikada ne kadar süzdüğünün Cockcroft-Gault formülüyle tahmini (mL/dk).</dd></div>
+        <div class="glossary-item"><dt>Child-Pugh skoru</dt><dd>Karaciğer fonksiyon bozukluğunun şiddetini 5 kritere dayanarak A/B/C sınıfına ayıran ordinal skor.</dd></div>
+        <div class="glossary-item"><dt>Allometrik ölçekleme</dt><dd>Bir fizyolojik/farmakokinetik parametrenin vücut ağırlığına göre üstel bir kuralla ölçeklenmesi.</dd></div>
+      </dl>
+    </section>
+
+    <footer class="page-footer">
+      Bu doküman, projenin kaynak koduna dayanılarak (Bölüm başına gerçek dosya
+      okunarak) hazırlanmıştır. Kod referansları (<span class="inline-code">dosya::fonksiyon</span>)
+      gri, monospace stilde işaretlenmiştir. Bölüm 9'daki ilk girdi (kreatinin
+      değeri) hariç tüm sayılar, ilgili fonksiyonlar bu oturumda gerçekten
+      çalıştırılarak üretilmiştir.
+    </footer>
+  </main>
+</div>
+
+<script>
+  // Aktif bölüm vurgusu (basit intersection-based scrollspy)
+  const links = Array.from(document.querySelectorAll('nav.sidebar a[href^="#"]'));
+  const sections = links.map(l => document.querySelector(l.getAttribute('href'))).filter(Boolean);
+  const setActive = (id) => {
+    links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + id));
+  };
+  if ('IntersectionObserver' in window) {
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) setActive(e.target.id); });
+    }, { rootMargin: '-10% 0px -75% 0px', threshold: 0 });
+    sections.forEach(s => obs.observe(s));
+  }
+</script>

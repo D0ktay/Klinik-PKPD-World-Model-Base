@@ -1,0 +1,55 @@
+Transient veri uretimi basliyor: 24 hasta x 2 doz (hedef 48 trajectory)...
+  hasta=0 doz=0.100 -> 31 kare, truncated=False, 95.3sn
+  hasta=0 doz=1.000 -> 31 kare, truncated=False, 94.5sn
+  hasta=1 doz=0.100 -> 31 kare, truncated=False, 95.5sn
+  hasta=1 doz=1.000 -> 31 kare, truncated=False, 95.3sn
+  hasta=2 doz=0.100 -> 31 kare, truncated=False, 94.9sn
+  hasta=2 doz=1.000 -> 31 kare, truncated=False, 93.4sn
+  hasta=3 doz=0.100 -> 31 kare, truncated=False, 97.6sn
+  hasta=3 doz=1.000 -> 31 kare, truncated=False, 100.0sn
+  hasta=4 doz=0.100 -> 31 kare, truncated=False, 96.7sn
+  hasta=4 doz=1.000 -> 31 kare, truncated=False, 97.1sn
+  hasta=5 doz=0.100 -> 31 kare, truncated=False, 96.8sn
+  hasta=5 doz=1.000 -> 31 kare, truncated=False, 104.6sn
+  hasta=6 doz=0.100 -> 31 kare, truncated=False, 106.7sn
+  hasta=6 doz=1.000 -> 31 kare, truncated=False, 106.2sn
+  hasta=7 doz=0.100 -> 31 kare, truncated=False, 101.0sn
+  hasta=7 doz=1.000 -> 31 kare, truncated=False, 97.6sn
+  hasta=8 doz=0.100 -> 31 kare, truncated=False, 98.5sn
+  hasta=8 doz=1.000 -> 31 kare, truncated=False, 101.7sn
+  hasta=9 doz=0.100 -> 31 kare, truncated=False, 96.9sn
+  hasta=9 doz=1.000 -> 31 kare, truncated=False, 102.9sn
+  hasta=10 doz=0.100 -> 31 kare, truncated=False, 94.4sn
+  hasta=10 doz=1.000 -> 31 kare, truncated=False, 104.4sn
+  hasta=11 doz=0.100 -> 31 kare, truncated=False, 94.3sn
+  hasta=11 doz=1.000 -> 31 kare, truncated=False, 105.4sn
+  hasta=12 doz=0.100 -> 31 kare, truncated=False, 101.3sn
+  hasta=12 doz=1.000 -> 31 kare, truncated=False, 116.4sn
+  hasta=13 doz=0.100 -> 31 kare, truncated=False, 100.8sn
+  hasta=13 doz=1.000 -> 31 kare, truncated=False, 100.1sn
+  hasta=14 doz=0.100 -> 31 kare, truncated=False, 97.1sn
+  hasta=14 doz=1.000 -> 31 kare, truncated=False, 98.0sn
+  hasta=15 doz=0.100 -> 31 kare, truncated=False, 101.5sn
+  hasta=15 doz=1.000 -> 31 kare, truncated=False, 95.6sn
+  hasta=16 doz=0.100 -> 31 kare, truncated=False, 94.3sn
+  hasta=16 doz=1.000 -> 31 kare, truncated=False, 94.4sn
+  hasta=17 doz=0.100 -> 31 kare, truncated=False, 98.7sn
+  hasta=17 doz=1.000 -> 31 kare, truncated=False, 97.9sn
+  hasta=18 doz=0.100 -> 31 kare, truncated=False, 109.1sn
+  hasta=18 doz=1.000 -> 31 kare, truncated=False, 94.4sn
+  hasta=19 doz=0.100 -> 31 kare, truncated=False, 99.0sn
+  hasta=19 doz=1.000 -> 31 kare, truncated=False, 98.7sn
+  hasta=20 doz=0.100 -> 31 kare, truncated=False, 95.7sn
+  hasta=20 doz=1.000 -> 31 kare, truncated=False, 101.1sn
+  hasta=21 doz=0.100 -> 31 kare, truncated=False, 109.0sn
+  hasta=21 doz=1.000 -> 31 kare, truncated=False, 96.2sn
+  hasta=22 doz=0.100 -> 31 kare, truncated=False, 101.3sn
+  hasta=22 doz=1.000 -> 31 kare, truncated=False, 100.0sn
+  hasta=23 doz=0.100 -> 31 kare, truncated=False, 102.6sn
+  hasta=23 doz=1.000 -> 31 kare, truncated=False, 108.0sn
+
+Tamamlandi (79.7 dakika).
+  Toplam trajectory: 48
+  Kesilen (truncated) trajectory: 0
+  Toplam kare (satir): 1488
+  Kaydedildi: C:\Users\oktay\Downloads\vivax_world_model_demo\vivax_world_model_demo\data\transient_dataset

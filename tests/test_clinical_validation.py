@@ -167,15 +167,19 @@ def test_bolus_model_concentration_wanes_by_60_minutes_unlike_sustained_infusion
     KARŞILAŞTIRILAMAZ bir davranış -- modelin BİLİNEN, dürüstçe
     belgelenen bir kapsam sınırı.
 
-    NOT (test yazılırken keşfedilen ayrı bir nüans): ETKİ (effect_fraction),
-    konsantrasyon kadar hızlı sönmüyor (~%11 kalıyor, ~%2 değil) -- çünkü
-    Emax modelinde pik etki zaten tam doygunluğa ulaşmıyor (%84.5, %100
-    değil; ec50=0.03 pik konsantrasyona (0.163) çok yakın), bu yüzden
-    kuyruktaki düşük konsantrasyon bile orantısız derecede "görünür" bir
-    etki üretmeye devam ediyor (Emax eğrisinin doygun olmayan kısmında).
-    Bu GERÇEK bir PK/PD davranışı (bug değil) -- ama bu yüzden bu testte
-    KONSANTRASYONU (ham PK, saturasyon etkisinden arınmış) kullanıyoruz,
-    "sürdürülen infüzyon" karşılaştırmasını çarpıtmamak için.
+    NOT (Faz 3 güncellemesi -- ec50 artık literatürden türetilmiş 0.737
+    mg/L, eskiden temsili 0.03 mg/L'ydi, bkz. CALIBRATION_REPORT.md §1a):
+    eski (düşük) ec50'de pik konsantrasyon (0.163 mg/L) EC50'ye çok
+    yakındı, bu yüzden Emax eğrisi neredeyse DOYGUNDU (%84.5 pik etki) --
+    etki, konsantrasyondan çok daha yavaş sönüyordu (60 dk'da ~%11 vs ~%2).
+    Yeni (yüksek) ec50'de ise pik konsantrasyon EC50'nin çok altında
+    kalıyor (0.163 << 0.737), yani Emax eğrisi DOYGUN OLMAYAN (yaklaşık
+    doğrusal) bölgesinde çalışıyor -- bu rejimde etki, konsantrasyonla
+    NEREDEYSE AYNI HIZDA sönüyor (60 dk'da ikisi de ~%2 civarında kalıyor).
+    Bu GERÇEK bir PK/PD davranışı (bug değil), sadece kalibrasyon
+    değişince rejim değişti -- bu testte yine de KONSANTRASYONU (ham PK)
+    kullanıyoruz, çünkü bu testin amacı özellikle PK bozunumunu
+    doğrulamak, PD/Emax davranışını değil.
     """
     patient, drug = _esmolol_and_patient()
     t = np.linspace(0, 1.0, 5000)  # ilk 1 saat

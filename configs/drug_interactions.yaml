@@ -1,0 +1,26 @@
+# Bilinen ilaç çifti etkileşimleri -- run_polypharmacy_simulation()'ın
+# opsiyonel interaction_matrix'ini doldurmak için kullanılır (bkz.
+# src/worldmodel/simulation.py > build_interaction_matrix).
+#
+# YAML tuple/pair key desteklemediği için liste-of-record formatı kullanılır.
+# Her girdi:
+#   drug_a / drug_b: drugs.yaml'daki ilaç anahtarları (sıra önemli değil --
+#     build_interaction_matrix() her iki yönde de eşleştirir)
+#   factor: run_polypharmacy_simulation()'daki interaction_matrix formülüne
+#     giren EK (additive modelin ÜSTÜNE) sinerji çarpanı --
+#     total_delta += factor * emax_a * effect_a * effect_b
+#   mechanism: neden bu ikisi birlikte ek risk taşıyor (insan-okunur)
+#   source: veri kaynağı sınıflandırması (bkz. CALIBRATION_REPORT.md) --
+#     📚 literatür / ⚠️ temsili / 👤 hasta verisi
+
+- drug_a: beta_bloker
+  drug_b: digoxin
+  factor: 0.5
+  mechanism: >
+    Esmolol (beta-bloker) ve digoksin İKİ FARKLI mekanizmadan (biri beta-1
+    reseptör blokajı, diğeri AV düğümü üzerinden artmış vagal tonus) AYNI
+    sonuca (AV iletiminin yavaşlaması, dolayısıyla nabzın düşmesi) varıyor --
+    bu yüzden birlikte verildiklerinde saf toplamsal (additive) modelin
+    öngördüğünden daha fazla bradikardi riski taşırlar (bkz.
+    compare_polypharmacy.py).
+  source: "⚠️ temsili -- yön/varlık gerçek farmakolojiye dayanıyor, kesin katsayı bir doz-yanıt çalışmasından kalibre edilmedi"

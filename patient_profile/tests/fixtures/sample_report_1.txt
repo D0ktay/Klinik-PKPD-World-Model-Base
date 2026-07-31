@@ -1,0 +1,21 @@
+SENTETİK ÖRNEK RAPOR -- gerçek bir hastaya ait değildir, test amaçlıdır.
+
+Rapor Tarihi: 05.03.2026
+Hasta: Test Hasta A, 70 yaşında, erkek, 70 kg, 172 cm.
+
+Laboratuvar Sonuçları:
+- Serum kreatinin: 1.0 mg/dL
+- Total bilirubin: 1.5 mg/dL
+- Albumin: 4.0 g/dL
+- INR: 1.2
+- Potasyum: 4.3 mEq/L
+- Kalsiyum: 9.4 mg/dL
+
+Vital Bulgular:
+- Nabız: 82/dk
+- Tansiyon: 130/85 mmHg
+
+Öykü: Asit yok. Hepatik ensefalopati bulgusu yok. Bilinen ilaç
+alerjisi: Penisilin (döküntü).
+
+Kronik Hastalıklar: Hipertansiyon (10 yıldır izlemde).

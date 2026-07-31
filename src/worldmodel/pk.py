@@ -86,6 +86,63 @@ def plasma_concentration_two_compartment(t_hours: np.ndarray, dose_mg: float,
     return np.clip(conc, 0, None)
 
 
+def plasma_concentration_infusion(t_hours: np.ndarray, infusion_rate_mg_hr: float,
+                                   ke: float, vd_per_kg: float, weight_kg: float,
+                                   infusion_duration_hr: float | None = None) -> np.ndarray:
+    """
+    Standart SÜREKLİ İV İNFÜZYON PK modeli -- zero-order (sabit hızlı) giriş +
+    first-order (ke ile orantılı) eliminasyon. Kapalı-form çözüm, standart
+    klinik farmakokinetik ders kitabı formülüdür (bkz. Rowland & Tozer,
+    *Clinical Pharmacokinetics and Pharmacodynamics*; ayrıca Winter, *Basic
+    Clinical Pharmacokinetics*) -- icat edilmiş/yaklaşık bir denklem DEĞİL.
+
+    dobutamin/nitroprussid gibi klinikte SADECE sürekli infüzyonla verilen
+    (gerçek bir bolus dozu olmayan) ilaçlar için, `plasma_concentration()`
+    (Bateman/bolus denklemi -- t=0'da C=0'dan başlayıp zirve yapıp düşen)
+    YERİNE kullanılır: infüzyon sırasında konsantrasyon zirve yapmadan
+    KARARLI-DURUMA (plato) doğru yükselir, kesildikten sonra normal
+    eksponansiyel eliminasyonla düşer.
+
+    Formül:
+        Cl = ke * (vd_per_kg * weight_kg)                       (klerens)
+        t <= infusion_duration_hr:  C(t) = (R/Cl) * (1 - e^(-ke*t))
+        t >  infusion_duration_hr:  C(t) = C(infusion_duration_hr) * e^(-ke*(t - infusion_duration_hr))
+
+    infusion_duration_hr=None: SONSUZ infüzyon (hiç kesilmez) -- sadece ilk
+    dal kullanılır, ikinci dal hiç tetiklenmez (ayrı bir kod yolu YOK, aynı
+    formülün doğal bir sınır durumu). t büyüdükçe C(t), kararlı-durum
+    değeri Css=R/Cl'ye YAKINSAR (1 - e^(-ke*t) -> 1).
+
+    SÜREKLİLİK (formülün t=infusion_duration_hr'da ATLAMA yapmaması): iki
+    dal da o noktada AYNI değeri (Css_kısmi = (R/Cl)*(1-e^(-ke*T_inf)))
+    verir -- bu matematiksel bir garanti (ikinci dal, birinci dalın o
+    andaki değerinden BAŞLAR), test edilmiştir.
+
+    t_hours: zaman dizisi (saat)
+    infusion_rate_mg_hr: infüzyon hızı (mg/saat) -- R
+    ke: eliminasyon hız sabiti (1/saat)
+    vd_per_kg: ilaca özgü dağılım hacmi katsayısı (L/kg)
+    weight_kg: hastanın kilosu
+    infusion_duration_hr: infüzyonun kesildiği zaman (saat) -- None ise
+        sonsuz/sürekli infüzyon (kesilmez)
+
+    Dönüş: zaman içindeki plazma konsantrasyonu (mg/L)
+    """
+    vd = vd_per_kg * weight_kg
+    cl = ke * vd
+
+    if infusion_duration_hr is None:
+        return (infusion_rate_mg_hr / cl) * (1 - np.exp(-ke * t_hours))
+
+    conc = np.where(
+        t_hours <= infusion_duration_hr,
+        (infusion_rate_mg_hr / cl) * (1 - np.exp(-ke * t_hours)),
+        (infusion_rate_mg_hr / cl) * (1 - np.exp(-ke * infusion_duration_hr))
+        * np.exp(-ke * (t_hours - infusion_duration_hr)),
+    )
+    return conc
+
+
 def organ_function_adjusted_ke(ke_mean: float, renal_function: float = 1.0,
                                 hepatic_function: float = 1.0,
                                 renal_clearance_fraction: float = 0.0,
@@ -116,3 +173,48 @@ def organ_function_adjusted_ke(ke_mean: float, renal_function: float = 1.0,
         + hepatic_clearance_fraction * hepatic_function
     )
     return ke_mean * remaining_fraction
+
+
+def pk_interaction_adjusted_ke(ke: float, victim_drug: str,
+                                active_perpetrators: list[str],
+                                pk_interaction_table: dict[tuple[str, str], float]) -> float:
+    """
+    Başka bir ilacın VARLIĞININ, bu ilacın (victim_drug) eliminasyon hızını
+    (ke) etkilemesini uygular -- PK-seviyeli (klerens/AUC) ilaç-ilaç
+    etkileşimi. `organ_function_adjusted_ke()`'nin ÇIKTISI üzerine
+    uygulanacak şekilde tasarlanmıştır (hastanın böbrek/karaciğer
+    kapasitesi ÖNCE, ilaç etkileşiminin o kapasiteyi ne kadar BLOKLADIĞI
+    SONRA -- bkz. simulation.py > run_polypharmacy_simulation).
+
+    MATEMATİK: AUC (eğrinin altındaki alan -- toplam ilaç maruziyeti) ∝
+    1/ke (dağılım hacmi Vd sabit kalırken). Bir "perpetrator" ilaç,
+    victim_drug'ın AUC'sini `auc_ratio` katına çıkarıyorsa (örn. Kessler
+    1987'de esmolol, digoksin AUC'sini ~1.11 katına çıkarıyor -- P-glikoprotein
+    [hücre zarındaki bir atılım taşıyıcı proteini] inhibisyonu yoluyla),
+    bu matematiksel olarak ke'yi aynı oranda AZALTMAKLA eşdeğerdir:
+
+        ke_final = ke / auc_ratio
+
+    ÇOKLU-PERPETRATOR İSKELETİ (şu an tabloda TEK kayıt olduğu için
+    egzersiz edilmiyor, ama mimari buna KAPALI değil): active_perpetrators
+    içindeki her ilaç, pk_interaction_table'da victim_drug'ı etkileyen bir
+    kayda sahipse, kendi auc_ratio'su ile SIRAYLA (çarpımsal olarak)
+    uygulanır. Bu, "birden fazla perpetrator varsa etkileri çarpılır"
+    şeklinde basit bir varsayımdır -- gerçek çoklu-ilaç PK etkileşimlerinde
+    doygunluk/rekabetçi inhibisyon gibi doğrusal-olmayan etkiler olabilir,
+    ama şu an tek kayıtlı tabloda bu varsayım hiç test edilmiyor/devreye
+    girmiyor, sadece ileride kod değişikliği gerektirmeden genişleyebilmesi
+    için böyle yazıldı.
+
+    victim_drug, tabloda hiçbir perpetrator'dan etkilenmiyorsa (ya da
+    active_perpetrators boşsa/hiçbiri eşleşmiyorsa), ke DEĞİŞMEDEN döner.
+
+    pk_interaction_table: {(perpetrator_drug, victim_drug): auc_ratio} --
+        bkz. simulation.py > build_pk_interaction_matrix().
+    """
+    adjusted_ke = ke
+    for perpetrator in active_perpetrators:
+        auc_ratio = pk_interaction_table.get((perpetrator, victim_drug))
+        if auc_ratio is not None:
+            adjusted_ke = adjusted_ke / auc_ratio
+    return adjusted_ke

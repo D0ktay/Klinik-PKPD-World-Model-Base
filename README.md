@@ -189,9 +189,23 @@ tüm sistemi hesaplıyor.
 
 | İlaç sınıfı | Hedeflenen CircAdapt parametresi | Fizyolojik anlamı |
 |---|---|---|
-| `beta_blocker` | `General.t_cycle` + `Patch.Sf_act` | nabız yavaşlar + kontraktilite azalır |
-| `positive_inotrope` | `General.t_cycle` + `Patch.Sf_act` | nabız değişir + kontraktilite artar |
-| `vasodilator` | `General.t_cycle` + `ArtVen.p0[0]` | nabız değişir + sistemik direnç azalır (kontraktiliteye dokunmaz) |
+| `beta_blocker` | `General.t_cycle` + `Patch.Sf_act` + `Timings.c_tau_av1` | nabız yavaşlar + kontraktilite azalır + AV iletim gecikmesi artar |
+| `positive_inotrope` | `General.t_cycle` + `Patch.Sf_act` + `Timings.c_tau_av1` | nabız değişir + kontraktilite artar + AV iletimi de aynı yönde değişir |
+| `vasodilator` | `General.t_cycle` + `ArtVen.p0[0]` | nabız değişir + sistemik direnç azalır (kontraktiliteye/AV iletimine dokunmaz) |
+
+**Faz 5 notu (`Timings.c_tau_av1`):** Bu parametre, hastanın KENDİ elektrolit
+durumunun (potasyum -- bkz. `apply_patient_electrolytes_to_circadapt`)
+AV düğümü iletimini etkilediği AYNI kanal. Beta-bloker/pozitif inotrop
+sınıfındaki bir ilaç ile hiperkalemi artık gerçekten aynı fiziksel yoldan
+birikiyor -- önceden (Faz 1-4) ilaç etkisi SADECE `t_cycle` üzerinden
+uygulanıyordu, hastanın elektrolit durumundan tamamen bağımsız bir
+kanaldan. **Dürüst kısıt (ölçüldü, tahmin değil):** CircAdapt bir 0D/lumped
+dolaşım modeli, gerçek AV BLOĞU (atlanan atımlar) fizyolojisini
+modellemiyor -- izole testte `c_tau_av1`'i 2x büyütmek EDV'de görünür fark
+YARATMADI, 5x'te GERÇEK bir fark ölçüldü (EDV 120.26→135.59 mL), 10x'te
+model sayısal olarak çöktü. Mekanizma çalışıyor ama varsayılan hasta/ilaç
+büyüklüklerinde ürettiği değişim bu görünürlük eşiğinin altında kalıyor
+(bkz. `CALIBRATION_REPORT.md` §5).
 
 ### Bazal nabız kalibrasyonu
 
@@ -466,7 +480,21 @@ streamlit run streamlit_app.py
 
 # Testler
 python -m pytest tests/ -v
+python -m pytest patient_profile/tests/ -v
 ```
+
+**`patient_profile/` modülü için ek kurulum notu:** `pytesseract`/`pdf2image`
+Python paketleri `pip install -r requirements.txt` ile kurulur, ama bunlar
+sadece OCR **fallback** yolu için gerekli (varsayılan yol değil -- bkz.
+`patient_profile/file_ingestion.py`). Bu fallback yolunu kullanacaksan,
+Python paketlerinin YANINDA sistem seviyesinde **Tesseract OCR** ve
+**Poppler** binary'lerinin de ayrıca kurulu olması ve PATH'e eklenmesi
+gerekir -- bunlar pip ile gelmez, sessizce eksik kalırlarsa OCR çağrısı
+çalışma anında hata verir (bkz. Windows için:
+[Tesseract kurulumu](https://github.com/UB-Mannheim/tesseract/wiki),
+[Poppler for Windows](https://github.com/oschwartz10612/poppler-windows/releases)).
+Ayrıca Gemini API çağrıları için `GEMINI_API_KEY` ortam değişkeni
+ayarlanmalı.
 
 ## 15. Proje yapısı
 

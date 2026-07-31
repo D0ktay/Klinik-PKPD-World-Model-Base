@@ -38,7 +38,10 @@ DRUG_PARAMETER_PROVENANCE: dict[str, dict[str, tuple[str, str]]] = {
         "vd_per_kg": (_LITERATURE, "yayınlanmış yetişkin/pediatrik PK çalışmaları"),
         "emax_hr": (_ASSUMPTION, "temsili -- kalibrasyon gerektirir"),
         "emax_sbp": (_ASSUMPTION, "temsili -- kalibrasyon gerektirir"),
-        "ec50": (_ASSUMPTION, "temsili -- kalibrasyon gerektirir"),
+        "ec50": (_LITERATURE, "Reilly ve ark. (Eur J Clin Pharmacol) -- infüzyon-hızı EC50'si "
+                              "(113 mcg/kg/dk) TÜRETİLEREK (Css=infüzyon/klerens) plazma "
+                              "konsantrasyonuna çevrildi, doğrudan ölçülmüş değil -- bkz. "
+                              "CALIBRATION_REPORT.md §1a"),
         "keo_hr": (_ASSUMPTION, "temsili -- literatürden değil"),
         "keo_sbp": (_ASSUMPTION, "temsili -- literatürden değil"),
         "renal_clearance_fraction": (_LITERATURE, "esmolol eritrosit esterazlarıyla metabolize olur, böbrekten bağımsız"),
@@ -54,13 +57,32 @@ DRUG_PARAMETER_PROVENANCE: dict[str, dict[str, tuple[str, str]]] = {
         "ec50": (_ASSUMPTION, "temsili -- kalibrasyon gerektirir"),
     },
     "Dobutamin (literatür kalibrasyonlu, bolus-eşdeğeri yaklaşıklık)": {
-        "dose_mg_per_kg": (_ASSUMPTION, "bolus-eşdeğeri yaklaşıklık -- dobutamin klinikte sadece infüzyon olarak verilir"),
-        "ka": (_ASSUMPTION, "~1 dk denge süresi varsayımı -- literatür değeri değil"),
+        "dose_mg_per_kg": (_ASSUMPTION, "bolus-eşdeğeri yaklaşıklık -- dobutamin klinikte sadece infüzyon olarak verilir (artık kullanılmıyor, bkz. infusion_rate_mcg_per_kg_min)"),
+        "ka": (_ASSUMPTION, "~1 dk denge süresi varsayımı -- literatür değeri değil (artık kullanılmıyor)"),
         "ke_mean": (_LITERATURE, "Kates & Leier 1978 -- t1/2 ~2.5 dk"),
         "vd_per_kg": (_LITERATURE, "Kates & Leier 1978 -- ~0.2 L/kg"),
         "emax_hr": (_ASSUMPTION, "temsili -- kalibrasyon gerektirir"),
         "emax_sbp": (_ASSUMPTION, "temsili -- kalibrasyon gerektirir"),
         "ec50": (_ASSUMPTION, "temsili -- kalibrasyon gerektirir"),
+        "infusion_rate_mcg_per_kg_min": (_ASSUMPTION, "'klasik 5 mcg/kg/dk infüzyon' -- pediatrik YBÜ çalışması (isim atfı zayıf), gerçek bir doz-yanıt çalışmasından türetilmedi"),
+    },
+    "Sodyum Nitroprussid (literatür kalibrasyonlu, bolus-eşdeğeri yaklaşıklık)": {
+        "dose_mg_per_kg": (_ASSUMPTION, "bolus-eşdeğeri yaklaşıklık -- nitroprussid klinikte sadece infüzyon olarak verilir (artık kullanılmıyor, bkz. infusion_rate_mcg_per_kg_min)"),
+        "ka": (_ASSUMPTION, "~1.4 dk denge süresi varsayımı -- literatür değeri değil (artık kullanılmıyor)"),
+        "ke_mean": (_LITERATURE, "FDA etiketi -- circulatory half-life ~2 dk"),
+        "vd_per_kg": (_LITERATURE, "FDA etiketi -- ekstrasellüler sıvı hacmiyle örtüşüyor"),
+        "emax_hr": (_ASSUMPTION, "temsili -- kalibrasyon gerektirir"),
+        "emax_sbp": (_ASSUMPTION, "temsili -- kalibrasyon gerektirir -- Gregoire ve ark. (aşağıya bkz.) ER50 verdi, Emax büyüklüğünü VERMEDİ"),
+        "ec50": (_LITERATURE, "📚 LİTERATÜR AMA ZAYIF KATEGORİ (esmolol/Kessler'deki doğrudan-yetişkin kategorisiyle KARIŞTIRILMASIN): "
+                               "Gregoire ve ark., PMC4516882 (\"A hemodynamic model to guide blood pressure control "
+                               "during deliberate hypotension with sodium nitroprusside in children\") -- PEDİATRİK "
+                               "popülasyon, YETİŞKİN hastaya ekstrapole edildi (bu projenin tüm hasta profilleri "
+                               "yetişkin). ER50 iki alt-grup için ayrı verildi (yüksek 0.34, düşük 0.103 mcg/kg/dk) "
+                               "-- ARİTMETİK ORTALAMASI (0.2215 mcg/kg/dk) tek temsili nokta olarak kullanıldı "
+                               "(VARSAYIM, bilgi kaybı). Esmolol Faz 3 (§1a) ile AYNI Css=R/Cl dönüşümüyle "
+                               "0.0032 mg/L'ye çevrildi. Ek kısıt: kaynak MAP ölçtü, biz sistolik basıncı "
+                               "(emax_sbp) temsil ediyoruz -- birebir aynı ölçüt değil. Bkz. CALIBRATION_REPORT.md Gap #1."),
+        "infusion_rate_mcg_per_kg_min": (_ASSUMPTION, "FDA onaylı doz aralığının (0.3-10 mcg/kg/dk) ortancası -- gerçek bir doz-yanıt çalışmasından (Kessler 1987 veya esmolol Faz 3 gibi) türetilmedi, düzenleyici aralıktan alınan tek-nokta temsili değer. nicardipine/dobutamine EC50'leriyle AYNI güven kategorisinde: ⚠️ temsili"),
     },
     "Digoksin (literatür kalibrasyonlu -- böbrek fonksiyonuna duyarlı)": {
         "dose_mg_per_kg": (_LITERATURE, "standart IV yükleme dozu aralığı (~10-15 mcg/kg)"),
@@ -137,9 +159,9 @@ def provenance_report(patient: Patient, drug: Drug) -> list[dict]:
     return report
 
 
-SOURCE_TYPE_EMOJI = {
-    _LITERATURE: "📚",
-    _ASSUMPTION: "⚠️",
-    _USER_INPUT: "👤",
-    "sınıflandırılmamış": "❔",
+SOURCE_TYPE_LABEL = {
+    _LITERATURE: "Literatür",
+    _ASSUMPTION: "Varsayım",
+    _USER_INPUT: "Hasta Verisi",
+    "sınıflandırılmamış": "Sınıflandırılmamış",
 }

@@ -1,0 +1,31 @@
+# PK-seviyeli (klerens/AUC) ilaç-ilaç etkileşimleri -- configs/drug_interactions.yaml
+# (PD-seviyesi, effect-çarpanı) dosyasından BİLİNÇLİ OLARAK AYRI tutulur, bkz.
+# src/worldmodel/pk.py > pk_interaction_adjusted_ke() ve
+# src/worldmodel/simulation.py > build_pk_interaction_matrix().
+#
+# YÖNLÜLÜK ÖNEMLİ: bu etkileşimler SİMETRİK DEĞİL -- perpetrator_drug,
+# victim_drug'ın klerensini (dolayısıyla AUC'sini) etkiler, TERSİ
+# modellenmiyor (esmolol digoksini etkiler, digoksin esmololü etkilemez).
+#
+# Her girdi:
+#   perpetrator_drug / victim_drug: configs/drugs.yaml'daki ilaç anahtarları
+#   mechanism: etkileşimin fizyolojik/farmakolojik mekanizması (insan-okunur)
+#   auc_ratio: victim ilacın AUC'sinin (eğrinin altındaki alan -- toplam ilaç
+#     maruziyeti) perpetrator VARLIĞINDA kaçla çarpıldığı. ke_final =
+#     ke_organ_ayarlı / auc_ratio (AUC ∝ 1/ke, Vd sabitken).
+#   source: veri kaynağı (bkz. CALIBRATION_REPORT.md)
+#
+# KIRMIZI ÇİZGİ: buraya sadece DOĞRUDAN yayınlanmış bir çalışmadan gelen
+# auc_ratio eklenir -- temsili/tahmini bir katsayı YOK. Başka bir çift için
+# doğrulanmış veri bulunursa buraya TEK SATIR eklemek yeterli (kod değişikliği
+# gerekmez), bkz. CALIBRATION_REPORT.md > Faz 4 sonrası not.
+
+- perpetrator_drug: beta_bloker   # esmolol
+  victim_drug: digoxin
+  mechanism: >
+    Esmolol, digoksinin böbrek/bağırsak P-glikoprotein (hücre zarındaki bir
+    atılım taşıyıcı proteini) yoluyla atılımını inhibe eder -- bu, digoksinin
+    vücutta daha yavaş temizlenmesine (klerens azalması), dolayısıyla daha
+    yüksek toplam maruziyete (AUC artışı) yol açar.
+  auc_ratio: 1.11
+  source: "Kessler ve ark. 1987 (esmolol-digoksin etkileşim çalışması, PubMed 2888792) -- 11 sağlıklı erkek gönüllüde digoksin AUC'si ~%10.8 arttı (2.60 -> 2.88 ng*saat/mL, p<0.05)"

@@ -16,9 +16,13 @@ Akış:
      apply_drug_effect_to_circadapt):
        - beta_blocker / positive_inotrope -> Patch.Sf_act (ventrikül
          kontraktilitesi) -- yön (artış/azalış) sbp_fraction'ın
-         işaretinden otomatik gelir.
+         işaretinden otomatik gelir. AYRICA (Faz 5) Timings.c_tau_av1
+         (AV düğümü iletim gecikmesi) -- hastanın elektrolit durumunun
+         (apply_patient_electrolytes_to_circadapt) KULLANDIĞI AYNI
+         parametre, yani bir AV-yavaşlatıcı ilaç + hiperkalemi artık
+         gerçekten aynı fiziksel yoldan birikiyor.
        - vasodilator -> ArtVen.p0[0] (CiSy = sistemik dolaşım direnci),
-         kontraktiliteye DOKUNULMAZ.
+         kontraktiliteye/AV iletimine DOKUNULMAZ.
      Bunların hepsi CircAdapt modelinin mutlak nabız/tansiyonu hasta
      profiliyle birebir kalibre olmadığı için göreli (fraksiyonel)
      olarak uygulanıyor -- sadece İLAÇ'IN YARATTIĞI ORANSAL DEĞİŞİM
@@ -52,6 +56,7 @@ from worldmodel.pk import plasma_concentration
 from worldmodel.pd import (
     emax_effect, apply_effect_to_vitals,
     potassium_av_conduction_factor, calcium_contractility_factor,
+    AV_NODE_SENSITIVE_DRUG_CLASSES, AV_BLOCK_THRESHOLD_MULTIPLIER, AV_BLOCK_ESCAPE_RHYTHM_HR,
 )
 
 from circadapt import VanOsta2024
@@ -151,6 +156,37 @@ def apply_drug_effect_to_circadapt(model, drug_class: str, hr_fraction: float,
         volume"), bu simülasyon için PFC geçici olarak devre dışı
         bırakılır -- aksi halde manuel direnç değişikliği
         stabilizasyon sırasında sessizce geri alınır (doğrulandı).
+
+    FAZ 5 -- AV düğümü iletim gecikmesi (Timings.c_tau_av1): "beta_blocker"
+    ve "positive_inotrope" sınıfındaki ilaçlar (esmolol, digoksin, dobutamin)
+    HEM sinüs düğümü hızını (t_cycle) HEM AV düğümü iletimini etkiler --
+    gerçek fizyoloji: beta-1 agonizmi (dobutamin) her ikisini de HIZLANDIRIR,
+    digoksinin artmış vagal tonusu her ikisini de YAVAŞLATIR. Aynı
+    hr_fraction, apply_patient_electrolytes_to_circadapt()'in KULLANDIĞI
+    AYNI parametreye (c_tau_av1) uygulanır -- Faz 4'te istatistiksel motorda
+    bulunan tutarsızlığın (ilaç ve elektrolit etkisi TAMAMEN AYRI
+    parametrelerden geçiyordu, aralarında hiç etkileşim yoktu) CircAdapt
+    karşılığı: artık bir AV-düğümü-yavaşlatıcı ilaç ile hiperkalemi, GERÇEKTEN
+    aynı fiziksel yoldan (c_tau_av1) birikiyor, ikisi birbirinden habersiz
+    iki ayrı mekanizma değil. İzole bir betikle doğrulandı: c_tau_av1
+    mutasyonu hem BİRİKMELİ (art arda çağrılar çarpılıyor) hem
+    model.run(stable=True) sonrası KALICI (ArtVen.p0'ın aksine, PFC benzeri
+    bir "geri alma" mekanizması YOK).
+
+    DÜRÜST KISIT (izole betikle ÖLÇÜLDÜ, tahmin değil): CircAdapt bir
+    0D/lumped dolaşım modeli -- gerçek AV BLOĞU (atlanan atımlar, iletim
+    kesintisi) fizyolojisini modellemiyor, sadece c_tau_av1'in dolaylı
+    hemodinamik sonucunu (LV dolum zamanlaması üzerinden). c_tau_av1'i
+    izole olarak 2x/5x/10x büyütüp ölçtük: 2x'te EDV'de görünür fark YOK
+    (120.26 -> 120.25 mL), 5x'te GERÇEK bir fark var (120.26 -> 135.59 mL,
+    Pmax 117.96 -> 112.08 mmHg), 10x'te model SAYISAL OLARAK ÇÖKÜYOR
+    (ModelCrashed). Yani mekanizma GERÇEK ve çalışıyor, ama varsayılan
+    hasta/ilaç büyüklüklerinde (hiperkalemi eğimi 0.3, tek ilaç dozu) üretilen
+    c_tau_av1 değişimi bu görünür-fark eşiğinin ALTINDA kalıyor -- vaka
+    raporlarındaki gibi ANİ/kesikli bir olayı (tam AV bloğu) zaten
+    yakalayamaz, ayrıca ŞU AN kalibre edilmiş büyüklüklerde sürekli
+    hemodinamik sonucu bile çoğu zaman ölçülebilir değil (bkz.
+    CALIBRATION_REPORT.md §5c-5d).
     """
     t_cycle_base = model["General"]["t_cycle"]
     model["General"]["t_cycle"] = t_cycle_base / hr_fraction
@@ -158,6 +194,9 @@ def apply_drug_effect_to_circadapt(model, drug_class: str, hr_fraction: float,
     if drug_class in ("beta_blocker", "positive_inotrope"):
         sf_act = model["Patch"]["Sf_act"]
         sf_act[VENTRICLE_WALL_INDICES] = sf_act[VENTRICLE_WALL_INDICES] * sbp_fraction
+
+        c_tau_av1 = model["Timings"]["c_tau_av1"]
+        c_tau_av1[0] = c_tau_av1[0] / hr_fraction
     elif drug_class == "vasodilator":
         model["PFC"]["is_active"] = False
         p0 = model["ArtVen"]["p0"]
@@ -269,6 +308,36 @@ def compute_drug_effect(patient, drug, t_peak_hours: float = None):
     }
 
 
+def cumulative_av_conduction_multiplier(patient, drugs, drug_effects):
+    """
+    `apply_patient_electrolytes_to_circadapt()`/`apply_drug_effect_to_circadapt()`
+    ÇAĞRILMADAN ÖNCE, bu çağrıların CircAdapt'e üreteceği KÜMÜLATİF
+    `Timings.c_tau_av1` çarpanını -- MODELE HİÇ DOKUNMADAN, saf hesap olarak --
+    üretir. Bu, discrete_av_block (Gap #3) ön-kontrolü için var: ADIM 0'daki
+    izole deneyde, bu çarpan 5x-7x arasına ulaştığında CircAdapt SAYISAL
+    OLARAK ÇÖKÜYOR (ModelCrashed) -- yani model bu değerle hiç ÇAĞRILMAMALI
+    (bkz. pd.py > AV_BLOCK_THRESHOLD_MULTIPLIER, run_comparison/
+    run_polypharmacy_comparison'daki kullanım).
+
+    drugs/drug_effects: AYNI SIRADA eşleşen listeler -- drug_effects,
+    `compute_drug_effect()`'in döndürdüğü ("hr_drug" içeren) sözlükler.
+    Tek ilaç için de ([drug], [drug_effect]) şeklinde çağrılabilir.
+
+    Formül, `apply_patient_electrolytes_to_circadapt`/`apply_drug_effect_
+    to_circadapt`'in modele UYGULADIĞI mutasyonların TAM AYNISI (k_factor
+    ile başlar, sonra her AV-duyarlı ilaç için SIRAYLA 1/hr_fraction ile
+    çarpımsal birikir -- `run_with_multiple_drugs`'ın "iki negatif kronotropun
+    etkisi TOPLAMDAN BÜYÜK olur" davranışıyla TUTARLI).
+    """
+    multiplier = potassium_av_conduction_factor(patient.potassium_mEqL)
+    for drug, effect in zip(drugs, drug_effects):
+        drug_class = drug.drug_class or "beta_blocker"
+        if drug_class in AV_NODE_SENSITIVE_DRUG_CLASSES:
+            hr_fraction = effect["hr_drug"] / patient.baseline_hr
+            multiplier /= max(hr_fraction, 1e-6)
+    return multiplier
+
+
 def run_baseline(patient=None):
     """
     patient verilirse, "baseline" artık jenerik bir sağlıklı
@@ -371,12 +440,43 @@ def run_polypharmacy_comparison(patient, drugs):
     drug_effects = [compute_drug_effect(patient, drug) for drug in drugs]
 
     baseline_model = run_baseline(patient)
-    combo_model = run_with_multiple_drugs(patient, drugs, drug_effects)
-
     t_base, p_base, v_base = lv_pressure_volume(baseline_model)
-    t_combo, p_combo, v_combo = lv_pressure_volume(combo_model)
-
     hr_base = 60.0 / baseline_model["General"]["t_cycle"]
+    tau_av_base_ms = float(baseline_model["Timings"]["tau_av"][0]) * 1000
+
+    # Discrete AV blok (Gap #3) ön-kontrolü -- bkz. cumulative_av_conduction_
+    # multiplier() docstring'i. CircAdapt'i çökertecek bir çarpanla ÇAĞIRMADAN
+    # ÖNCE tespit ediyoruz.
+    av_block_triggered = (
+        patient.known_av_block_degree == "third"
+        or cumulative_av_conduction_multiplier(patient, drugs, drug_effects) >= AV_BLOCK_THRESHOLD_MULTIPLIER
+    )
+
+    if av_block_triggered:
+        # CircAdapt'e HİÇ dokunulmuyor (çökeceği için) -- "ilaçlı/kombine"
+        # durum için gerçek bir hemodinamik iz (p/v) HESAPLANAMIYOR. Baseline
+        # eğrilerini burada yeniden kullanmak YANILTICI olurdu (av_block_
+        # triggered flag'i kontrol edilmeden okunursa, "ilaçlı durum baseline'la
+        # aynı" gibi yanlış bir izlenim verir) -- bu yüzden np.nan ile dolu,
+        # baseline'la AYNI ŞEKİLLİ (ama baseline'dan bağımsız, veri taşımayan)
+        # diziler kullanılıyor. Çağıran (bkz. streamlit_app.py), av_block_
+        # triggered=True olduğunda bu eğrileri ÇİZMEMELİ/`.max()`/`.min()`
+        # ÇAĞIRMAMALI -- asıl sinyal hr_drug_model'in ESCAPE_RHYTHM_HR'ye
+        # sabitlenmesi. tau_av_drug_ms de HESAPLANAMAZ (model hiç
+        # çalıştırılmadı) -- None.
+        nan_p_drug = np.full_like(p_base, np.nan)
+        nan_v_drug = np.full_like(v_base, np.nan)
+        return {
+            "drug_effects": drug_effects,
+            "t_base": t_base, "p_base": p_base, "v_base": v_base,
+            "t_drug": t_base, "p_drug": nan_p_drug, "v_drug": nan_v_drug,
+            "hr_base": hr_base, "hr_drug_model": AV_BLOCK_ESCAPE_RHYTHM_HR,
+            "tau_av_base_ms": tau_av_base_ms, "tau_av_drug_ms": None,
+            "av_block_triggered": True,
+        }
+
+    combo_model = run_with_multiple_drugs(patient, drugs, drug_effects)
+    t_combo, p_combo, v_combo = lv_pressure_volume(combo_model)
     hr_combo = 60.0 / combo_model["General"]["t_cycle"]
 
     return {
@@ -384,6 +484,13 @@ def run_polypharmacy_comparison(patient, drugs):
         "t_base": t_base, "p_base": p_base, "v_base": v_base,
         "t_drug": t_combo, "p_drug": p_combo, "v_drug": v_combo,
         "hr_base": hr_base, "hr_drug_model": hr_combo,
+        # Faz 5 -- AV düğümü iletim gecikmesi (gerçek klinikte PR aralığı
+        # olarak görülen büyüklüğün CircAdapt karşılığı), ms cinsinden.
+        # İzole doğrulamada bu, EDV/LV basıncından çok daha DUYARLI bir
+        # metrik çıktı -- bkz. CALIBRATION_REPORT.md §6.
+        "tau_av_base_ms": tau_av_base_ms,
+        "tau_av_drug_ms": float(combo_model["Timings"]["tau_av"][0]) * 1000,
+        "av_block_triggered": False,
     }
 
 
@@ -392,12 +499,32 @@ def run_comparison(patient, drug):
     drug_effect = compute_drug_effect(patient, drug)
 
     baseline_model = run_baseline(patient)
-    drug_model = run_with_drug(patient, drug, drug_effect)
-
     t_base, p_base, v_base = lv_pressure_volume(baseline_model)
-    t_drug, p_drug, v_drug = lv_pressure_volume(drug_model)
-
     hr_base = 60.0 / baseline_model["General"]["t_cycle"]
+    tau_av_base_ms = float(baseline_model["Timings"]["tau_av"][0]) * 1000
+
+    av_block_triggered = (
+        patient.known_av_block_degree == "third"
+        or cumulative_av_conduction_multiplier(patient, [drug], [drug_effect]) >= AV_BLOCK_THRESHOLD_MULTIPLIER
+    )
+
+    if av_block_triggered:
+        # bkz. run_polypharmacy_comparison'daki aynı dal -- gerçek bir p/v
+        # izi hesaplanamadığı için np.nan ile dolu, baseline'dan bağımsız
+        # diziler kullanılıyor (baseline verisini KOPYALAMAK yanıltıcı olurdu).
+        nan_p_drug = np.full_like(p_base, np.nan)
+        nan_v_drug = np.full_like(v_base, np.nan)
+        return {
+            "drug_effect": drug_effect,
+            "t_base": t_base, "p_base": p_base, "v_base": v_base,
+            "t_drug": t_base, "p_drug": nan_p_drug, "v_drug": nan_v_drug,
+            "hr_base": hr_base, "hr_drug_model": AV_BLOCK_ESCAPE_RHYTHM_HR,
+            "tau_av_base_ms": tau_av_base_ms, "tau_av_drug_ms": None,
+            "av_block_triggered": True,
+        }
+
+    drug_model = run_with_drug(patient, drug, drug_effect)
+    t_drug, p_drug, v_drug = lv_pressure_volume(drug_model)
     hr_drug_model = 60.0 / drug_model["General"]["t_cycle"]
 
     return {
@@ -405,6 +532,10 @@ def run_comparison(patient, drug):
         "t_base": t_base, "p_base": p_base, "v_base": v_base,
         "t_drug": t_drug, "p_drug": p_drug, "v_drug": v_drug,
         "hr_base": hr_base, "hr_drug_model": hr_drug_model,
+        # Faz 5 -- bkz. run_polypharmacy_comparison'daki aynı alan.
+        "tau_av_base_ms": tau_av_base_ms,
+        "tau_av_drug_ms": float(drug_model["Timings"]["tau_av"][0]) * 1000,
+        "av_block_triggered": False,
     }
 
 

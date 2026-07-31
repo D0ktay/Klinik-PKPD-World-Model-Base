@@ -1,0 +1,9 @@
+SENTETİK ÖRNEK RAPOR (KONTROL) -- gerçek bir hastaya ait değildir, test amaçlıdır.
+
+Rapor Tarihi: 01.06.2026
+Hasta: Test Hasta A kontrolü.
+
+Laboratuvar Sonuçları:
+- Serum kreatinin: 2.4 mg/dL (önceki kontrole göre belirgin artış)
+
+Not: Diğer değerler bu ziyarette tekrarlanmadı.

@@ -33,7 +33,9 @@ esmolol:
     Wiest 1991'den türetilen 9 dk'lık eliminasyon yarı ömrünü BAĞIMSIZ
     olarak doğruluyor. Dozaj bölümü: "Optional loading dose: 500 mcg per
     kg infused over one minute" -- drugs.yaml'daki 0.5 mg/kg değerini de
-    doğrudan doğruluyor.
+    doğrudan doğruluyor. ec50=0.737: Faz 3'te drugs.yaml'da güncellenen
+    değerle senkronize edildi (bkz. CALIBRATION_REPORT.md §1a -- Reilly
+    ve ark. infüzyon-hızı EC50'sinden türetildi, 0.03 eski/temsili değerdi).
   dose_mg: 38.0              # referans ~76kg hasta için (0.5 mg/kg * 76kg)
   dose_mg_per_kg: 0.5
   ka: 21.0
@@ -41,7 +43,7 @@ esmolol:
   vd_per_kg: 2.0
   emax_hr: 25
   emax_sbp: 20
-  ec50: 0.03
+  ec50: 0.737
 
 metoprolol:
   display_name: "Metoprolol (IV, literatür kalibrasyonlu)"

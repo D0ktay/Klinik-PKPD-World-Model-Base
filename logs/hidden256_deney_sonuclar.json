@@ -1,0 +1,20 @@
+{
+  "h256_seed0": {
+    "status": "tamam",
+    "dt_a": 567.3376710414886,
+    "dt_c": 132.7519211769104,
+    "out_dir": "models/dynamics_jepa_transient_1560run_h256_seed0"
+  },
+  "h256_seed1": {
+    "status": "tamam",
+    "dt_a": 547.120011806488,
+    "dt_c": 128.82000136375427,
+    "out_dir": "models/dynamics_jepa_transient_1560run_h256_seed1"
+  },
+  "h256_seed2": {
+    "status": "tamam",
+    "dt_a": 564.3867330551147,
+    "dt_c": 141.35209131240845,
+    "out_dir": "models/dynamics_jepa_transient_1560run_h256_seed2"
+  }
+}

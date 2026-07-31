@@ -5,3 +5,4 @@ venv/
 outputs/*.png
 .pytest_cache/
 .vscode/settings.json
+patient_records/

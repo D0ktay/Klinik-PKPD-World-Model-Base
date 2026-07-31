@@ -6,5 +6,33 @@ streamlit>=1.32
 fpdf2>=2.8
 pandas>=2.0
 requests>=2.30
+
+# patient_profile/ modülü (hasta profili LLM extraction) bağımlılıkları --
+# pydantic: şema/validasyon; google-genai: Gemini API çağrısı;
+# pdfplumber: PDF metin katmanı çıkarma; pytesseract/pdf2image: taranmış
+# PDF'ler için YEDEK (yerel) OCR yolu -- VARSAYILAN DEĞİL (bkz.
+# patient_profile/file_ingestion.py modül docstring'i, Gemini'nin native
+# PDF/görüntü desteği tercih ediliyor). pytesseract/pdf2image kuruluysa
+# bile, sistem seviyesinde ayrıca Tesseract OCR binary'si (ve pdf2image
+# için Poppler) kurulu OLMALI -- bunlar pip paketleri DEĞİL, işletim
+# sistemi paketleridir (örn. Windows'ta Tesseract kurulumu:
+# https://github.com/UB-Mannheim/tesseract/wiki , Poppler:
+# https://github.com/oschwartz10612/poppler-windows/releases -- ikisi de
+# PATH'e eklenmeli). Sadece OCR fallback'i (use_native_multimodal_for_scanned=False)
+# kullanılacaksa gereklidir.
+pydantic>=2.0
+google-genai>=1.0
+pdfplumber>=0.11
+pytesseract>=0.3
+pdf2image>=1.17
+
 https://framework.circadapt.org/files/circadapt-2602-py3-none-linux_x86_64.whl ; sys_platform == "linux"
 https://framework.circadapt.org/files/circadapt-2602-py3-none-win_amd64.whl ; sys_platform == "win32"
+
+# src/worldmodel/learned_dynamics/ (JEPA -- öğrenilmiş dinamik model, bkz. o
+# paketin __init__.py'si) bağımlılığı -- projenin geri kalanı (numpy/pandas/
+# scipy) hiç autodiff/sinir ağı kullanmaz, bu SADECE bu alt-pakete özel.
+# Varsayılan pip kurulumu CPU sürümünü getirir; GPU'nuz varsa CUDA'ya özel
+# bir wheel'i (https://pytorch.org/get-started/locally/) elle kurabilirsiniz
+# -- kod `torch.cuda.is_available()` ile otomatik algılar, GPU ŞART DEĞİL.
+torch>=2.2

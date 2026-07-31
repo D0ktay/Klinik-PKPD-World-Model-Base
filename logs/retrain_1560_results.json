@@ -1,0 +1,56 @@
+{
+  "260data_seed0": {
+    "status": "tamam",
+    "dt_a": 47.27320146560669,
+    "dt_b": 11.66800832748413,
+    "dt_c": 13.012247323989868,
+    "finetune_ok": true,
+    "out_dir": "models/dynamics_jepa_transient_1560run_260data_seed0",
+    "data_dir": "data/transient_dataset_large_backup_260"
+  },
+  "260data_seed1": {
+    "status": "tamam",
+    "dt_a": 44.4093062877655,
+    "dt_b": 11.407698154449463,
+    "dt_c": 13.054801225662231,
+    "finetune_ok": true,
+    "out_dir": "models/dynamics_jepa_transient_1560run_260data_seed1",
+    "data_dir": "data/transient_dataset_large_backup_260"
+  },
+  "260data_seed2": {
+    "status": "tamam",
+    "dt_a": 44.404541969299316,
+    "dt_b": 11.367225170135498,
+    "dt_c": 13.024497747421265,
+    "finetune_ok": true,
+    "out_dir": "models/dynamics_jepa_transient_1560run_260data_seed2",
+    "data_dir": "data/transient_dataset_large_backup_260"
+  },
+  "1560data_seed0": {
+    "status": "tamam",
+    "dt_a": 292.98525857925415,
+    "dt_b": 26.073877096176147,
+    "dt_c": 68.94616651535034,
+    "finetune_ok": true,
+    "out_dir": "models/dynamics_jepa_transient_1560run_1560data_seed0",
+    "data_dir": "data/transient_dataset_large"
+  },
+  "1560data_seed1": {
+    "status": "tamam",
+    "dt_a": 290.3794205188751,
+    "dt_b": 25.252039909362793,
+    "dt_c": 69.08817195892334,
+    "finetune_ok": true,
+    "out_dir": "models/dynamics_jepa_transient_1560run_1560data_seed1",
+    "data_dir": "data/transient_dataset_large"
+  },
+  "1560data_seed2": {
+    "status": "tamam",
+    "dt_a": 290.88522696495056,
+    "dt_b": 25.928757429122925,
+    "dt_c": 71.72857689857483,
+    "finetune_ok": true,
+    "out_dir": "models/dynamics_jepa_transient_1560run_1560data_seed2",
+    "data_dir": "data/transient_dataset_large"
+  }
+}

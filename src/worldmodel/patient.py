@@ -44,6 +44,17 @@ class Patient:
     # yetmezliği) / "hypertension" (kronik hipertansiyon) -- bkz.
     # integrate_drug_with_circadapt.py > apply_comorbidity_to_circadapt.
     comorbidity: str | None = None
+    # Hastanın BİLİNEN, ÖNCEDEN TANI KONMUŞ AV bloğu (kalbin elektrik iletim
+    # gecikmesi) derecesi -- "none" | "first" | "second" | "third" | None
+    # (bilinmiyor/kayıt yok). patient_profile modülünün extraction şemasındaki
+    # (patient_profile/schema.py > known_av_block_degree) alanla AYNI isimde
+    # ve değer kümesinde -- bu, o modülün src/worldmodel/patient.py'ye ilk
+    # gerçek bağlantısı. SADECE "third" (3. derece/tam blok) simülasyon
+    # mantığına (bkz. simulation.py > discrete_av_block_mask kullanımı)
+    # bağlıdır -- "first"/"second" için büyüklük tahmini gerektiren bir sayı
+    # UYDURULMADI, bu bilinçli bir kapsam sınırı (bkz. CALIBRATION_REPORT.md
+    # Gap #3). None/"none" -- normal davranış, DEĞİŞMEZ (geriye dönük uyumlu).
+    known_av_block_degree: str | None = None
 
     @property
     def bsa(self) -> float:
@@ -97,6 +108,20 @@ class Drug:
     # açıkça gösterir.
     renal_clearance_fraction: float = 0.0
     hepatic_clearance_fraction: float = 0.0
+    # Sürekli İV infüzyon PK modeli (bkz. pk.py > plasma_concentration_infusion) --
+    # dobutamin/nitroprussid gibi klinikte SADECE sürekli infüzyonla verilen,
+    # gerçek bir bolus dozu olmayan ilaçlar için. İKİSİ DE None ise (varsayılan,
+    # geriye dönük uyumluluk): ilaç mevcut bolus yolundan (plasma_concentration(),
+    # dose_mg/dose_mg_per_kg/ka üzerinden) geçmeye devam eder -- DAVRANIŞ DEĞİŞMEZ.
+    # infusion_rate_mcg_per_kg_min doluysa simulation.py > get_plasma_concentration()
+    # bolus yerine infüzyon formülünü çağırır (dose_mg/dose_mg_per_kg/ka o zaman
+    # KULLANILMAZ ama SİLİNMEZ -- geriye dönük bolus davranışına dönülebilmesi için).
+    infusion_rate_mcg_per_kg_min: float | None = None
+    # None = sonsuz/sürekli infüzyon (simülasyon süresi boyunca kesilmez) --
+    # dobutamin/nitroprussid klinikte tipik olarak izlenen süre boyunca kesintisiz
+    # devam eder, bu yüzden varsayılan budur (bkz. pk.py > plasma_concentration_infusion
+    # docstring'i, "sonsuz infüzyon" sınır durumu).
+    infusion_duration_hr: float | None = None
 
 
 def load_patients(path: str) -> dict[str, Patient]:
@@ -115,6 +140,33 @@ def load_drugs(path: str) -> dict[str, Drug]:
 # izlenebilirlik (provenance) alanları da içerir -- bunlar Drug'ın parçası
 # DEĞİL, bu yüzden Drug(**vals) çağrılmadan önce ayrıştırılmaları gerekir.
 _PROVENANCE_FIELDS = {"rxcui", "source_url", "retrieved_date", "calibration_notes"}
+
+
+def load_drug_interactions(path: str) -> list[dict]:
+    """
+    configs/drug_interactions.yaml'ı okur -- bilinen ilaç çifti
+    etkileşimlerinin (drug_a, drug_b, factor, mechanism, source) ham liste
+    hâli. simulation.py > build_interaction_matrix(), bunu seçilen ilaçların
+    index sırasına göre run_polypharmacy_simulation()'ın beklediği
+    {(i, j): factor} sözlüğüne çevirir.
+    """
+    with open(path, "r", encoding="utf-8") as f:
+        raw = yaml.safe_load(f)
+    return raw or []
+
+
+def load_drug_pk_interactions(path: str) -> list[dict]:
+    """
+    configs/drug_pk_interactions.yaml'ı okur -- PK-seviyesindeki (klerens/AUC)
+    ilaç-ilaç etkileşimlerinin ham liste hâli (perpetrator_drug, victim_drug,
+    mechanism, auc_ratio, source). configs/drug_interactions.yaml'daki
+    PD-seviyesi (effect-çarpanı) etkileşimlerden BİLİNÇLİ OLARAK AYRI --
+    bkz. simulation.py > build_pk_interaction_matrix(), pk.py >
+    pk_interaction_adjusted_ke().
+    """
+    with open(path, "r", encoding="utf-8") as f:
+        raw = yaml.safe_load(f)
+    return raw or []
 
 
 def load_verified_drugs(path: str) -> dict[str, dict]:

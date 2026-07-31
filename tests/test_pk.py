@@ -12,13 +12,24 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import numpy as np
+import pytest
 from worldmodel.pk import (
     plasma_concentration, plasma_concentration_two_compartment, organ_function_adjusted_ke,
+    pk_interaction_adjusted_ke, plasma_concentration_infusion,
 )
-from worldmodel.pd import emax_effect, effect_compartment_concentration
-from worldmodel.patient import load_drugs, load_patients, load_verified_drugs, Patient, Drug
+from worldmodel.pd import (
+    emax_effect, effect_compartment_concentration, loewe_combined_effect,
+    av_conduction_cumulative_multiplier, discrete_av_block_mask,
+    AV_BLOCK_THRESHOLD_MULTIPLIER, AV_BLOCK_ESCAPE_RHYTHM_HR,
+)
+from worldmodel.patient import (
+    load_drugs, load_patients, load_verified_drugs, load_drug_interactions, load_drug_pk_interactions,
+    Patient, Drug,
+)
 from worldmodel.simulation import (
-    run_monte_carlo, recommend_dose, run_polypharmacy_simulation, summarize, run_reference_trace,
+    run_monte_carlo, recommend_dose, run_polypharmacy_simulation, run_polypharmacy_simulation_loewe,
+    build_interaction_matrix, summarize, run_reference_trace, recommend_polypharmacy_dose_scale,
+    build_pk_interaction_matrix, get_plasma_concentration, apply_discrete_av_block,
 )
 
 
@@ -467,6 +478,10 @@ def test_esmolol_verified_matches_esmolol_in_main_drugs_yaml():
     assert v.dose_mg_per_kg == m.dose_mg_per_kg
     assert v.ke_mean == m.ke_mean
     assert v.vd_per_kg == m.vd_per_kg
+    # ec50 de dahil: Faz 3'te drugs.yaml'da güncellenip drugs_verified.yaml'da
+    # unutulmuştu (test PK alanlarını kontrol ediyordu, PD'yi değil) --
+    # bu satır o sınıf bir sessiz-sapmayı bir daha yakalasın diye eklendi.
+    assert v.ec50 == m.ec50
 
 
 def test_fetch_fda_label_sections_quotes_multiword_drug_names():
@@ -580,6 +595,159 @@ def test_recommend_dose_without_polypharmacy_result_matches_old_behavior():
     assert rec["polypharmacy_bradycardia_risk_pct"] is None
 
 
+def test_load_drug_interactions_reads_config():
+    """configs/drug_interactions.yaml -- esmolol/digoksin girdisi doğru okunmalı."""
+    interactions = load_drug_interactions(
+        os.path.join(os.path.dirname(__file__), "..", "configs", "drug_interactions.yaml"))
+    assert len(interactions) >= 1
+    record = next(r for r in interactions if {r["drug_a"], r["drug_b"]} == {"beta_bloker", "digoxin"})
+    assert isinstance(record["factor"], float)
+    assert record["factor"] == 0.5
+
+
+def test_build_interaction_matrix_matches_regardless_of_selection_order():
+    """Kullanıcı ilaçları hangi sırada seçerse seçsin (drugs.yaml sırası ile
+    interaction kaydındaki drug_a/drug_b sırası uyuşmasa bile) doğru index
+    çiftine eşleşmeli."""
+    interactions = [{"drug_a": "beta_bloker", "drug_b": "digoxin", "factor": 0.5}]
+
+    matrix_forward = build_interaction_matrix(["beta_bloker", "digoxin"], interactions)
+    assert matrix_forward == {(0, 1): 0.5}
+
+    matrix_reversed = build_interaction_matrix(["digoxin", "beta_bloker"], interactions)
+    assert matrix_reversed == {(1, 0): 0.5}
+
+
+def test_build_interaction_matrix_empty_when_no_match():
+    """İlgili ilaç çifti seçilmediyse (ya da kayıt yoksa) boş sözlük döner --
+    run_polypharmacy_simulation bu durumda saf toplamsal davranışa düşer."""
+    interactions = [{"drug_a": "beta_bloker", "drug_b": "digoxin", "factor": 0.5}]
+    matrix = build_interaction_matrix(["beta_bloker", "vazodilator"], interactions)
+    assert matrix == {}
+
+
+def test_run_polypharmacy_comparison_circadapt_lower_hr_than_either_alone():
+    """CircAdapt (gerçek kalp mekaniği) tarafında da, esmolol+digoksin
+    kombinasyonu ikisinin tek başına ürettiğinden daha düşük nabza yol
+    açmalı -- test_polypharmacy_two_negative_chronotropes_lower_hr_more_than_either_alone'ın
+    (istatistiksel PK/PD) CircAdapt karşılığı."""
+    from integrate_drug_with_circadapt import run_comparison, run_polypharmacy_comparison
+
+    patients = load_patients(os.path.join(os.path.dirname(__file__), "..", "configs", "patients.yaml"))
+    drugs = load_drugs(os.path.join(os.path.dirname(__file__), "..", "configs", "drugs.yaml"))
+    patient = patients["hasta_a"]
+    esmolol_moderate = replace(drugs["beta_bloker"], dose_mg=20.0, dose_mg_per_kg=None)
+    digoxin = drugs["digoxin"]
+
+    r_esmolol = run_comparison(patient, esmolol_moderate)
+    r_digoxin = run_comparison(patient, digoxin)
+    r_combo = run_polypharmacy_comparison(patient, [esmolol_moderate, digoxin])
+
+    assert r_combo["hr_drug_model"] < r_esmolol["hr_drug_model"]
+    assert r_combo["hr_drug_model"] < r_digoxin["hr_drug_model"]
+
+
+def test_tau_av_fields_present_and_amplified_for_hyperkalemic_patient():
+    """Faz 5 sonrası eklenen tau_av_base_ms/tau_av_drug_ms alanları -- hem
+    run_comparison hem run_polypharmacy_comparison'da bulunmalı, ve
+    hiperkalemik hastada ilacın AV gecikmesi üzerindeki MUTLAK etkisi
+    (fark), sağlıklı hastadan BÜYÜK olmalı (bkz. CALIBRATION_REPORT.md §6 --
+    izole ölçümde 17.3ms vs 25.0ms)."""
+    from integrate_drug_with_circadapt import run_comparison
+
+    patients = load_patients(os.path.join(os.path.dirname(__file__), "..", "configs", "patients.yaml"))
+    drugs = load_drugs(os.path.join(os.path.dirname(__file__), "..", "configs", "drugs.yaml"))
+    esmolol = drugs["beta_bloker"]
+
+    r_healthy = run_comparison(patients["hasta_a"], esmolol)
+    r_hyperkalemic = run_comparison(patients["hasta_c_hiperkalemi"], esmolol)
+
+    for r in (r_healthy, r_hyperkalemic):
+        assert "tau_av_base_ms" in r and "tau_av_drug_ms" in r
+        assert r["tau_av_drug_ms"] > r["tau_av_base_ms"]  # esmolol AV iletimini yavaşlatır
+
+    delta_healthy = r_healthy["tau_av_drug_ms"] - r_healthy["tau_av_base_ms"]
+    delta_hyperkalemic = r_hyperkalemic["tau_av_drug_ms"] - r_hyperkalemic["tau_av_base_ms"]
+    assert delta_hyperkalemic > delta_healthy
+
+
+# --- Loewe additivity (Faz 2 -- gerçek doz-eşdeğerliği bazlı birleştirme) ---
+
+def test_loewe_combined_effect_matches_single_drug_emax_formula():
+    """N=1 için loewe_combined_effect, mevcut emax_effect() formülüyle
+    (kapalı-form) TAM eşleşmeli -- bu matematiksel bir garanti, çünkü
+    Loewe denklemi N=1'de emax*C/(EC50+C)'ye indirgeniyor."""
+    conc = np.array([0.001, 0.01, 0.03, 0.1, 1.0])
+    ec50, emax = 0.03, 25.0
+
+    loewe_result = loewe_combined_effect([conc], [ec50], [emax])
+    expected = emax * conc / (ec50 + conc)
+
+    np.testing.assert_allclose(loewe_result, expected, rtol=1e-3)
+
+
+def test_loewe_combined_effect_self_combination_matches_double_concentration():
+    """Bir ilacı 'kendisiyle' birleştirmek (aynı ec50/emax, C ve C), TEK bir
+    ilacın 2*C dozundaki etkisiyle AYNI sonucu vermeli -- izobol teorisinin
+    bilinen temel özelliği ("self-combination reproduces own dose-response")."""
+    conc = np.array([0.005, 0.02, 0.05, 0.2])
+    ec50, emax = 0.03, 25.0
+
+    combined = loewe_combined_effect([conc, conc], [ec50, ec50], [emax, emax])
+    single_at_double_conc = emax * (2 * conc) / (ec50 + 2 * conc)
+
+    np.testing.assert_allclose(combined, single_at_double_conc, rtol=1e-3)
+
+
+def test_loewe_combined_effect_rejects_opposite_direction_emax():
+    """emax'ları zıt yönlü (biri azaltıcı, biri artırıcı) ilaçlar Loewe
+    additivity modeline uymaz -- açık bir ValueError beklenir."""
+    conc = np.array([0.01, 0.05])
+    try:
+        loewe_combined_effect([conc, conc], [0.03, 0.05], [25.0, -6.0])
+        assert False, "ValueError bekleniyordu"
+    except ValueError:
+        pass
+
+
+def test_loewe_vs_additive_diverge_when_emaxes_differ():
+    """Esmolol (emax_hr=25) + digoksin (emax_hr=15) kombinasyonunda, Loewe
+    additivity ve saf toplamsal (additive) modelin FARKLI sonuç ürettiğini
+    doğrula -- Tallarida'nın uyardığı 'eğrisel izobol' durumu tam bu, Faz
+    2'nin motivasyonu."""
+    patients = load_patients(os.path.join(os.path.dirname(__file__), "..", "configs", "patients.yaml"))
+    drugs = load_drugs(os.path.join(os.path.dirname(__file__), "..", "configs", "drugs.yaml"))
+    patient = patients["hasta_a"]
+    esmolol_moderate = replace(drugs["beta_bloker"], dose_mg=20.0, dose_mg_per_kg=None)
+    digoxin = drugs["digoxin"]
+
+    additive = summarize(run_polypharmacy_simulation(patient, [esmolol_moderate, digoxin],
+                                                       n_realizations=150, seed=7))
+    loewe = summarize(run_polypharmacy_simulation_loewe(patient, [esmolol_moderate, digoxin],
+                                                          n_realizations=150, seed=7))
+
+    # Faz 3'te esmolol ec50'si literatürden türetilen (daha yüksek, 0.737
+    # mg/L) bir değerle güncellendi -- bu, klinik dozlarda esmololün etki
+    # payını (eskisine göre) küçültüyor, dolayısıyla iki modelin sapması da
+    # eskisinden daha küçük ama HÂLÂ ÖLÇÜLEBİLİR şekilde sıfırdan farklı.
+    assert additive["mean_min_hr"] != pytest.approx(loewe["mean_min_hr"], abs=0.05)
+
+
+def test_run_polypharmacy_simulation_loewe_runs_and_stays_physiological():
+    """Uçtan uca çalışır, nabız/tansiyon negatife inmez (aynı fizyolojik
+    üst sınır garantisi run_polypharmacy_simulation()'daki gibi)."""
+    patients = load_patients(os.path.join(os.path.dirname(__file__), "..", "configs", "patients.yaml"))
+    drugs = load_drugs(os.path.join(os.path.dirname(__file__), "..", "configs", "drugs.yaml"))
+    patient = patients["hasta_a"]
+    esmolol_moderate = replace(drugs["beta_bloker"], dose_mg=20.0, dose_mg_per_kg=None)
+    digoxin = drugs["digoxin"]
+
+    result = run_polypharmacy_simulation_loewe(patient, [esmolol_moderate, digoxin], n_realizations=50, seed=3)
+    assert (result.hr_runs >= 0).all()
+    assert (result.sbp_runs >= 0).all()
+    assert result.hr_runs.shape == (50, 200)
+
+
 # --- Elektrolit / laboratuvar verisinin kalp üzerindeki etkisi ---
 
 def test_potassium_conduction_factor_normal_range_is_unity():
@@ -612,6 +780,85 @@ def test_patient_has_abnormal_electrolytes_flag():
     assert normal.has_abnormal_electrolytes is False
     assert hyperkalemic.has_abnormal_electrolytes is True
     assert hypocalcemic.has_abnormal_electrolytes is True
+
+
+def test_hyperkalemic_patient_shows_amplified_statistical_drug_effect():
+    """Faz 4 doğrulaması sırasında bulunan boşluk: potassium_av_conduction_
+    factor() önceden SADECE CircAdapt tarafında kullanılıyordu, istatistiksel
+    Monte Carlo motoru hastanın potasyum düzeyinden bağımsızdı -- gerçek bir
+    vaka raporu (bkz. CALIBRATION_REPORT.md §5) hiperkalemik hastalarda
+    beta-bloker+digoksin kombinasyonunun TAM AV BLOĞUNA yol açabildiğini
+    gösteriyor. Bu test, düzeltmenin (electrolyte_adjusted_emax_hr)
+    istatistiksel motora da yansıdığını doğruluyor: aynı ilaç/doz,
+    hiperkalemik hastada SAĞLIKLI hastadan DAHA DÜŞÜK bir nabza yol açmalı."""
+    patients = load_patients(os.path.join(os.path.dirname(__file__), "..", "configs", "patients.yaml"))
+    drugs = load_drugs(os.path.join(os.path.dirname(__file__), "..", "configs", "drugs.yaml"))
+    esmolol, digoxin = drugs["beta_bloker"], drugs["digoxin"]
+
+    healthy = summarize(run_polypharmacy_simulation(
+        patients["hasta_a"], [esmolol, digoxin], n_realizations=150, seed=1))
+    hyperkalemic = summarize(run_polypharmacy_simulation(
+        patients["hasta_c_hiperkalemi"], [esmolol, digoxin], n_realizations=150, seed=1))
+
+    assert hyperkalemic["mean_min_hr"] < healthy["mean_min_hr"]
+    assert hyperkalemic["pct_bradycardia_risk"] >= healthy["pct_bradycardia_risk"]
+
+
+def test_electrolyte_adjustment_is_noop_for_vasodilator():
+    """AV_NODE_SENSITIVE_DRUG_CLASSES kısıtı doğru çalışıyor mu: vazodilatör
+    (damar direnci üzerinden etki eder, AV düğümünden bağımsız) hiperkalemi
+    ile büyütülmemeli -- sadece beta_blocker/positive_inotrope büyütülür."""
+    from worldmodel.pd import electrolyte_adjusted_emax_hr, electrolyte_adjusted_emax_sbp
+
+    assert electrolyte_adjusted_emax_hr(10.0, "vasodilator", potassium_mEqL=7.5) == 10.0
+    assert electrolyte_adjusted_emax_hr(10.0, "beta_blocker", potassium_mEqL=7.5) > 10.0
+    assert electrolyte_adjusted_emax_sbp(10.0, "vasodilator", calcium_mgdL=6.0) == 10.0
+    assert electrolyte_adjusted_emax_sbp(10.0, "positive_inotrope", calcium_mgdL=6.0) < 10.0
+
+
+def test_apply_drug_effect_to_circadapt_beta_blocker_also_targets_av_conduction():
+    """Faz 5: beta_blocker/positive_inotrope sınıfı artık Timings.c_tau_av1'i
+    de hedefliyor (AV düğümü iletim gecikmesi) -- apply_patient_electrolytes_
+    to_circadapt()'in (potasyum) kullandığı AYNI parametre. Bu test sadece
+    PLUMBING'i doğruluyor (parametre gerçekten, beklenen formülle değişiyor
+    mu) -- büyüklüğün varsayılan demo hastalarında hemodinamik olarak ne
+    kadar GÖRÜNÜR olduğu ayrı bir kalibrasyon sorusu (bkz.
+    CALIBRATION_REPORT.md §5 -- izole doğrulamada mult=5.0'da EDV'de gerçek
+    bir fark ölçüldü, ama varsayılan hasta/ilaç büyüklüklerinde fark küçük)."""
+    from circadapt import VanOsta2024
+    from integrate_drug_with_circadapt import apply_drug_effect_to_circadapt, calibrate_circadapt_to_patient
+
+    patients = load_patients(os.path.join(os.path.dirname(__file__), "..", "configs", "patients.yaml"))
+    patient = patients["hasta_a"]
+
+    model = VanOsta2024()
+    calibrate_circadapt_to_patient(model, patient)
+    baseline_c_tau_av1 = float(model["Timings"]["c_tau_av1"][0])
+
+    apply_drug_effect_to_circadapt(model, "beta_blocker", hr_fraction=0.8, sbp_fraction=0.85)
+    drug_c_tau_av1 = float(model["Timings"]["c_tau_av1"][0])
+
+    assert drug_c_tau_av1 == pytest.approx(baseline_c_tau_av1 / 0.8, rel=1e-6)
+
+
+def test_apply_drug_effect_to_circadapt_vasodilator_does_not_touch_av_conduction():
+    """vasodilator sınıfı damar direnci üzerinden etki eder, AV düğümünden
+    bağımsız -- Timings.c_tau_av1 DEĞİŞMEMELİ (electrolyte_adjusted_emax_hr/
+    sbp'deki AV_NODE_SENSITIVE_DRUG_CLASSES kısıtıyla tutarlı)."""
+    from circadapt import VanOsta2024
+    from integrate_drug_with_circadapt import apply_drug_effect_to_circadapt, calibrate_circadapt_to_patient
+
+    patients = load_patients(os.path.join(os.path.dirname(__file__), "..", "configs", "patients.yaml"))
+    patient = patients["hasta_a"]
+
+    model = VanOsta2024()
+    calibrate_circadapt_to_patient(model, patient)
+    baseline_c_tau_av1 = float(model["Timings"]["c_tau_av1"][0])
+
+    apply_drug_effect_to_circadapt(model, "vasodilator", hr_fraction=1.1, sbp_fraction=0.9)
+    drug_c_tau_av1 = float(model["Timings"]["c_tau_av1"][0])
+
+    assert drug_c_tau_av1 == pytest.approx(baseline_c_tau_av1, rel=1e-9)
 
 
 def test_recommend_dose_flags_electrolyte_warning():
@@ -697,8 +944,14 @@ def test_provenance_report_includes_both_literature_and_assumption_sources_for_e
 
     ka_row = next(r for r in report if r["parameter"] == "ka")
     assert ka_row["source_type"] == "literatür"
+    # Faz 3'te esmolol ec50'si literatürden TÜRETİLDİ (bkz.
+    # CALIBRATION_REPORT.md §1a) -- artık "literatür" olarak işaretli.
+    # emax_hr hâlâ tamamen temsili, "varsayım" kategorisinin canlı kaldığını
+    # doğrular.
     ec50_row = next(r for r in report if r["parameter"] == "ec50")
-    assert ec50_row["source_type"] == "varsayım"
+    assert ec50_row["source_type"] == "literatür"
+    emax_hr_row = next(r for r in report if r["parameter"] == "emax_hr")
+    assert emax_hr_row["source_type"] == "varsayım"
 
 
 def test_provenance_report_includes_patient_fields_as_user_input():
@@ -929,3 +1182,536 @@ def test_run_stable_reraises_if_still_crashed_after_retry():
         assert False, "ModelCrashed tekrar fırlatılmalıydı"
     except ModelCrashed:
         pass
+
+
+# --- recommend_polypharmacy_dose_scale (N-ilaçlı doz önerisi, ADIM sonrası) ---
+
+
+def test_recommend_polypharmacy_dose_scale_preserves_dose_ratio():
+    """Önerilen dozların birbirine oranı, kullanıcının girdiği orijinal orana eşit kalmalı (tek ortak scale)."""
+    patients = load_patients("configs/patients.yaml")
+    drugs = load_drugs("configs/drugs.yaml")
+    patient = patients["hasta_a"]
+    combo = [drugs["beta_bloker"], drugs["digoxin"]]
+
+    def _effective_dose(drug):
+        return drug.dose_mg_per_kg * patient.weight_kg if drug.dose_mg_per_kg is not None else drug.dose_mg
+
+    original_ratio = _effective_dose(combo[0]) / _effective_dose(combo[1])
+
+    result = recommend_polypharmacy_dose_scale(patient, combo, n_candidates=10, n_realizations=80)
+
+    adjusted = list(result["adjusted_doses"].values())
+    adjusted_ratio = adjusted[0] / adjusted[1]
+    assert adjusted_ratio == pytest.approx(original_ratio, rel=1e-6)
+
+
+def test_recommend_polypharmacy_dose_scale_stays_within_scan_bounds():
+    patients = load_patients("configs/patients.yaml")
+    drugs = load_drugs("configs/drugs.yaml")
+    patient = patients["hasta_a"]
+    combo = [drugs["beta_bloker"], drugs["digoxin"]]
+
+    result = recommend_polypharmacy_dose_scale(
+        patient, combo, scale_min=0.2, scale_max=2.0, n_candidates=10, n_realizations=80
+    )
+    assert 0.2 <= result["scale"] <= 2.0
+
+
+def test_recommend_polypharmacy_dose_scale_returns_one_dose_per_drug():
+    patients = load_patients("configs/patients.yaml")
+    drugs = load_drugs("configs/drugs.yaml")
+    patient = patients["hasta_a"]
+    combo = [drugs["beta_bloker"], drugs["digoxin"]]
+
+    result = recommend_polypharmacy_dose_scale(patient, combo, n_candidates=8, n_realizations=80)
+    assert len(result["adjusted_doses"]) == len(combo)
+    assert all(dose > 0 for dose in result["adjusted_doses"].values())
+
+
+def test_recommend_polypharmacy_dose_scale_reports_unsafe_when_no_scale_meets_threshold():
+    """Eşik imkânsız kadar sıkı olursa (%0), hiçbir aday güvenli sayılmamalı -- is_safe=False, en düşük riskli aday dönmeli."""
+    patients = load_patients("configs/patients.yaml")
+    drugs = load_drugs("configs/drugs.yaml")
+    patient = patients["hasta_a"]
+    combo = [drugs["beta_bloker"], drugs["digoxin"]]
+
+    result = recommend_polypharmacy_dose_scale(
+        patient, combo, n_candidates=8, n_realizations=80, max_bradycardia_risk_pct=-1.0
+    )
+    assert result["is_safe"] is False
+
+
+def test_recommend_polypharmacy_dose_scale_candidates_cover_full_range():
+    patients = load_patients("configs/patients.yaml")
+    drugs = load_drugs("configs/drugs.yaml")
+    patient = patients["hasta_a"]
+    combo = [drugs["beta_bloker"], drugs["digoxin"]]
+
+    result = recommend_polypharmacy_dose_scale(
+        patient, combo, scale_min=0.5, scale_max=1.5, n_candidates=5, n_realizations=50
+    )
+    scales = [c[0] for c in result["candidates"]]
+    assert scales[0] == pytest.approx(0.5)
+    assert scales[-1] == pytest.approx(1.5)
+    assert len(scales) == 5
+
+
+# --- PK-seviyeli ilaç-ilaç etkileşimi (esmolol -> digoksin, Kessler 1987) ---
+
+
+def test_load_drug_pk_interactions_reads_config():
+    records = load_drug_pk_interactions("configs/drug_pk_interactions.yaml")
+    assert len(records) == 1
+    assert records[0]["perpetrator_drug"] == "beta_bloker"
+    assert records[0]["victim_drug"] == "digoxin"
+    assert records[0]["auc_ratio"] == pytest.approx(1.11)
+
+
+def test_build_pk_interaction_matrix_matches_when_both_drugs_selected():
+    records = load_drug_pk_interactions("configs/drug_pk_interactions.yaml")
+    matrix = build_pk_interaction_matrix(["beta_bloker", "digoxin"], records)
+    assert matrix == {("beta_bloker", "digoxin"): pytest.approx(1.11)}
+
+
+def test_build_pk_interaction_matrix_empty_when_perpetrator_not_selected():
+    records = load_drug_pk_interactions("configs/drug_pk_interactions.yaml")
+    matrix = build_pk_interaction_matrix(["digoxin"], records)
+    assert matrix == {}
+
+
+def test_build_pk_interaction_matrix_empty_when_victim_not_selected():
+    records = load_drug_pk_interactions("configs/drug_pk_interactions.yaml")
+    matrix = build_pk_interaction_matrix(["beta_bloker"], records)
+    assert matrix == {}
+
+
+def test_pk_interaction_adjusted_ke_esmolol_present_reduces_digoxin_ke_by_exact_auc_ratio():
+    """Elle hesap: ke_final = ke_organ_ayarlı / 1.11 -- ratio tam olarak 1.11 olmalı."""
+    ke_organ_adjusted = 0.01925  # digoxin.ke_mean, organ fonksiyonu normal hastada değişmez (renal_function=1.0)
+    matrix = {("beta_bloker", "digoxin"): 1.11}
+    ke_final = pk_interaction_adjusted_ke(ke_organ_adjusted, "digoxin", ["beta_bloker"], matrix)
+    assert ke_final == pytest.approx(ke_organ_adjusted / 1.11)
+    assert ke_organ_adjusted / ke_final == pytest.approx(1.11)
+
+
+def test_pk_interaction_adjusted_ke_esmolol_absent_leaves_ke_unchanged():
+    """Regresyon: esmolol rejimde yoksa (active_perpetrators boş), ke organ_function_adjusted_ke() çıktısıyla BİREBİR aynı kalmalı."""
+    patients = load_patients("configs/patients.yaml")
+    drugs = load_drugs("configs/drugs.yaml")
+    patient = patients["hasta_a"]
+    digoxin = drugs["digoxin"]
+
+    ke_organ_adjusted = organ_function_adjusted_ke(
+        digoxin.ke_mean, patient.renal_function, patient.hepatic_function,
+        digoxin.renal_clearance_fraction, digoxin.hepatic_clearance_fraction,
+    )
+    matrix = {("beta_bloker", "digoxin"): 1.11}
+    ke_final = pk_interaction_adjusted_ke(ke_organ_adjusted, "digoxin", [], matrix)
+    assert ke_final == ke_organ_adjusted
+
+
+def test_pk_interaction_adjusted_ke_non_victim_drug_unaffected():
+    """Tabloda victim olarak geçmeyen bir ilaç (örn. nikardipin), perpetrator rejimde olsa bile etkilenmemeli."""
+    matrix = {("beta_bloker", "digoxin"): 1.11}
+    ke_final = pk_interaction_adjusted_ke(5.0, "nicardipine", ["beta_bloker"], matrix)
+    assert ke_final == 5.0
+
+
+def test_pk_interaction_adjusted_ke_perpetrator_present_but_victim_not_in_regimen_no_side_effect():
+    """Sadece esmolol rejimdeyse (digoksin hiç seçilmediyse), esmololün KENDİ ke'si bu mekanizmadan hiç etkilenmemeli (esmolol tabloda victim değil)."""
+    matrix = {("beta_bloker", "digoxin"): 1.11}
+    ke_esmolol = pk_interaction_adjusted_ke(4.6, "beta_bloker", [], matrix)
+    assert ke_esmolol == 4.6
+
+
+def test_run_polypharmacy_simulation_pk_interaction_raises_digoxin_concentration_vs_baseline():
+    """Uçtan uca: esmolol+digoksin birlikteyken, PK etkileşimi AÇIKKEN digoksin konsantrasyonu (dolayısıyla AUC) AÇIK OLMADAN daha yüksek olmalı."""
+    patients = load_patients("configs/patients.yaml")
+    drugs = load_drugs("configs/drugs.yaml")
+    patient = patients["hasta_a"]
+    combo = [drugs["beta_bloker"], drugs["digoxin"]]
+    pk_records = load_drug_pk_interactions("configs/drug_pk_interactions.yaml")
+    pk_matrix = build_pk_interaction_matrix(["beta_bloker", "digoxin"], pk_records)
+
+    result_without = run_polypharmacy_simulation(patient, combo, n_realizations=50, seed=7)
+    result_with = run_polypharmacy_simulation(
+        patient, combo, n_realizations=50, seed=7,
+        drug_keys=["beta_bloker", "digoxin"], pk_interaction_matrix=pk_matrix,
+    )
+    # d_idx==0 (esmolol) conc_runs'a yazılıyor -- PK etkileşimi digoxin'i (d_idx==1)
+    # hedeflediği için esmololün KENDİ konsantrasyonu DEĞİŞMEMELİ (regresyon kontrolü).
+    assert np.allclose(result_without.conc_runs, result_with.conc_runs)
+    # Ama digoksinin daha yavaş elimine olması, nabız/tansiyon üzerindeki
+    # etkisini (total_hr_delta/total_sbp_delta üzerinden) değiştirmeli --
+    # yani iki sonuç setinin AYNI olmaması beklenir.
+    assert not np.allclose(result_without.hr_runs, result_with.hr_runs)
+
+
+def test_run_polypharmacy_simulation_pk_interaction_defaults_to_no_change():
+    """drug_keys/pk_interaction_matrix verilmezse (varsayılan None), mevcut davranış AYNEN korunmalı."""
+    patients = load_patients("configs/patients.yaml")
+    drugs = load_drugs("configs/drugs.yaml")
+    patient = patients["hasta_a"]
+    combo = [drugs["beta_bloker"], drugs["digoxin"]]
+
+    result_a = run_polypharmacy_simulation(patient, combo, n_realizations=50, seed=7)
+    result_b = run_polypharmacy_simulation(patient, combo, n_realizations=50, seed=7, drug_keys=None, pk_interaction_matrix=None)
+    assert np.allclose(result_a.hr_runs, result_b.hr_runs)
+
+
+# --- Sürekli infüzyon PK modeli (dobutamin/nitroprussid, Rowland & Tozer standart formülü) ---
+
+
+def test_plasma_concentration_infusion_approaches_steady_state_when_never_stopped():
+    """infusion_duration_hr=None -- t büyüdükçe C(t), Css=R/Cl'ye yakınsamalı."""
+    ke = 16.6  # dobutamine ke_mean
+    vd_per_kg = 0.2
+    weight_kg = 76
+    infusion_rate_mg_hr = 5.0 * weight_kg * 60.0 / 1000.0  # 5 mcg/kg/dk -> mg/saat
+    cl = ke * vd_per_kg * weight_kg
+    css = infusion_rate_mg_hr / cl
+
+    t = np.array([0.01, 0.5, 2.0, 8.0, 24.0])
+    conc = plasma_concentration_infusion(t, infusion_rate_mg_hr, ke, vd_per_kg, weight_kg, infusion_duration_hr=None)
+
+    assert conc[0] < conc[-1]  # monoton artış (kesilmediği için)
+    assert conc[-1] == pytest.approx(css, rel=1e-6)  # 24 saatte (>>1/ke) kararlı-duruma ulaşmış olmalı
+
+
+def test_plasma_concentration_infusion_starts_at_zero():
+    ke = 16.6
+    t = np.array([0.0, 1.0, 5.0])
+    conc = plasma_concentration_infusion(t, infusion_rate_mg_hr=10.0, ke=ke, vd_per_kg=0.2, weight_kg=76,
+                                          infusion_duration_hr=None)
+    assert conc[0] == pytest.approx(0.0)
+
+
+def test_plasma_concentration_infusion_continuous_at_cutoff_boundary():
+    """SÜREKLİLİK testi: t=infusion_duration_hr anında iki dal AYNI değeri vermeli -- formülün atlama yapmadığının kanıtı."""
+    ke = 16.6
+    vd_per_kg = 0.2
+    weight_kg = 76
+    infusion_rate_mg_hr = 10.0
+    infusion_duration_hr = 2.0
+
+    epsilon = 1e-6
+    t = np.array([infusion_duration_hr - epsilon, infusion_duration_hr, infusion_duration_hr + epsilon])
+    conc = plasma_concentration_infusion(t, infusion_rate_mg_hr, ke, vd_per_kg, weight_kg, infusion_duration_hr)
+
+    assert conc[0] == pytest.approx(conc[1], abs=1e-4)
+    assert conc[1] == pytest.approx(conc[2], abs=1e-4)
+
+
+def test_plasma_concentration_infusion_declines_after_cutoff():
+    ke = 16.6
+    vd_per_kg = 0.2
+    weight_kg = 76
+    infusion_rate_mg_hr = 10.0
+    infusion_duration_hr = 2.0
+
+    t = np.array([infusion_duration_hr, infusion_duration_hr + 1.0, infusion_duration_hr + 5.0])
+    conc = plasma_concentration_infusion(t, infusion_rate_mg_hr, ke, vd_per_kg, weight_kg, infusion_duration_hr)
+    assert conc[0] > conc[1] > conc[2]
+
+
+def test_get_plasma_concentration_regression_for_bolus_drug_unaffected():
+    """Regresyon: infusion_rate_mcg_per_kg_min=None olan bir ilaç (örn. esmolol), get_plasma_concentration ile ESKİ plasma_concentration() çağrısıyla BİREBİR aynı sonucu vermeli."""
+    drugs = load_drugs("configs/drugs.yaml")
+    esmolol = drugs["beta_bloker"]
+    assert esmolol.infusion_rate_mcg_per_kg_min is None
+
+    t = np.linspace(0, 8, 50)
+    weight_kg = 76
+    ke = 4.6
+
+    conc_via_helper = get_plasma_concentration(esmolol, t, weight_kg, ke)
+    conc_direct = plasma_concentration(
+        t, esmolol.dose_mg, esmolol.ka, ke, weight_kg, esmolol.vd_per_kg,
+        dose_mg_per_kg=esmolol.dose_mg_per_kg,
+    )
+    assert np.array_equal(conc_via_helper, conc_direct)
+
+
+def test_nicardipine_unaffected_stays_bolus_and_has_no_infusion_fields():
+    """Kırmızı çizgi: nikardipin'e dokunulmadı -- infüzyon alanları None, hâlâ bolus davranışında."""
+    drugs = load_drugs("configs/drugs.yaml")
+    nicardipine = drugs["nicardipine"]
+    assert nicardipine.infusion_rate_mcg_per_kg_min is None
+    assert nicardipine.infusion_duration_hr is None
+
+
+def test_dobutamine_now_uses_infusion_formula_and_plateaus():
+    """Uçtan uca: dobutamin artık infusion_rate_mcg_per_kg_min dolu -- get_plasma_concentration infüzyon formülüne yönlenmeli, konsantrasyon zirve yapmadan platoya ulaşmalı."""
+    drugs = load_drugs("configs/drugs.yaml")
+    dobutamine = drugs["dobutamine"]
+    assert dobutamine.infusion_rate_mcg_per_kg_min == pytest.approx(5.0)
+    assert dobutamine.infusion_duration_hr is None
+
+    t = np.linspace(0.01, 8, 200)
+    weight_kg = 76
+    ke = dobutamine.ke_mean
+    conc = get_plasma_concentration(dobutamine, t, weight_kg, ke)
+
+    # Bolus profilinin aksine (zirve yapıp düşer), infüzyon profili MONOTON
+    # ARTMALI (kesilmediği için) -- hiçbir noktada bir öncekinden düşük olmamalı.
+    assert np.all(np.diff(conc) >= -1e-12)
+
+
+def test_sodium_nitroprusside_selectable_from_main_drugs_yaml():
+    """ADIM 0'da bulunan boşluk kapatıldı: nitroprussid artık ana drugs.yaml'dan seçilebiliyor."""
+    drugs = load_drugs("configs/drugs.yaml")
+    assert "sodium_nitroprusside" in drugs
+    nitro = drugs["sodium_nitroprusside"]
+    assert nitro.infusion_rate_mcg_per_kg_min == pytest.approx(5.15)
+    assert nitro.ke_mean == pytest.approx(20.79)  # drugs_verified.yaml'daki değerle birebir kopyalandı
+
+
+def test_run_monte_carlo_dobutamine_end_to_end_runs_with_infusion_model():
+    patients = load_patients("configs/patients.yaml")
+    drugs = load_drugs("configs/drugs.yaml")
+    patient = patients["hasta_a"]
+    dobutamine = drugs["dobutamine"]
+
+    result = run_monte_carlo(patient, dobutamine, n_realizations=30)
+    assert result.conc_runs.shape == (30, 200)
+    assert (result.conc_runs >= 0).all()
+
+
+# --- Discrete (all-or-nothing) AV blok (Gap #3) ---
+
+
+def test_av_conduction_cumulative_multiplier_normal_electrolyte_no_drug():
+    """Normal K+ (4.25), AV-duyarlı ilaç yok -- çarpan tam 1.0 olmalı."""
+    m = av_conduction_cumulative_multiplier(np.array([1.0, 1.0]), False, 4.25)
+    assert np.allclose(m, 1.0)
+
+
+def test_av_conduction_cumulative_multiplier_scales_with_electrolyte_only():
+    m = av_conduction_cumulative_multiplier(np.array([1.0]), False, 6.5)
+    expected = 1.0 + 0.3 * (6.5 - 5.0)  # potassium_av_conduction_factor formülü
+    assert m[0] == pytest.approx(expected)
+
+
+def test_av_conduction_cumulative_multiplier_divides_by_hr_fraction_when_av_sensitive():
+    hr_fraction = np.array([0.5])  # nabız yarıya inmiş (AV-duyarlı ilaç etkisi)
+    m = av_conduction_cumulative_multiplier(hr_fraction, True, 4.25)
+    assert m[0] == pytest.approx(1.0 / 0.5)
+
+
+def test_discrete_av_block_mask_no_crossing_stays_all_false():
+    hr = np.full(50, 78.0)  # bazal, hiç düşmüyor
+    mask = discrete_av_block_mask(hr, baseline_hr=78.0, av_sensitive_drug_present=False,
+                                   potassium_mEqL=4.25, threshold_multiplier=AV_BLOCK_THRESHOLD_MULTIPLIER)
+    assert not mask.any()
+
+
+def test_discrete_av_block_mask_latches_from_first_crossing_onward():
+    # hr, zamanla 78 -> 20'ye düşüyor (AV-duyarlı ilaç + hiperkalemi senaryosu) --
+    # hr_fraction küçüldükçe multiplier büyür, bir noktada eşiği (3.0) aşar.
+    baseline_hr = 78.0
+    hr = np.linspace(78.0, 20.0, 100)
+    mask = discrete_av_block_mask(hr, baseline_hr, av_sensitive_drug_present=True,
+                                   potassium_mEqL=6.5, threshold_multiplier=AV_BLOCK_THRESHOLD_MULTIPLIER)
+    assert mask.any()
+    first_idx = int(np.argmax(mask))
+    # mandal: ilk aşımdan SONRAKİ TÜM noktalar True olmalı
+    assert mask[first_idx:].all()
+    assert not mask[:first_idx].any()
+
+
+def test_apply_discrete_av_block_no_trigger_regression():
+    """Eşiğin altında kalan normal bir senaryo -- hr DEĞİŞMEMELİ (regresyon yok)."""
+    patients = load_patients("configs/patients.yaml")
+    patient = patients["hasta_a"]  # normal K+=4.25, known_av_block_degree=None
+    hr = np.full(50, 65.0)
+    result = apply_discrete_av_block(hr.copy(), patient, av_sensitive_drug_present=True)
+    assert np.array_equal(result, hr)
+
+
+def test_apply_discrete_av_block_triggers_escape_rhythm_for_hyperkalemic_av_sensitive_combo():
+    """Sentetik: hiperkalemi + AV-duyarlı ilaç kombinasyonunun ürettiği düşük hr_fraction, eşiği aşıp ESCAPE_RHYTHM_HR'ye geçmeli."""
+    patients = load_patients("configs/patients.yaml")
+    patient = replace(patients["hasta_c_hiperkalemi"], potassium_mEqL=6.5)  # k_factor=1.45
+    baseline_hr = patient.baseline_hr
+    # hr_fraction 0.4'e kadar düşüyor (nabız %60 baskılanmış) -- multiplier = 1.45/0.4 = 3.625 > 3.0
+    hr = np.linspace(baseline_hr, baseline_hr * 0.4, 100)
+    result = apply_discrete_av_block(hr, patient, av_sensitive_drug_present=True)
+    assert result[-1] == pytest.approx(AV_BLOCK_ESCAPE_RHYTHM_HR)
+    assert not np.array_equal(result, hr)
+
+
+def test_apply_discrete_av_block_known_third_degree_starts_at_t0():
+    patients = load_patients("configs/patients.yaml")
+    patient = replace(patients["hasta_a"], known_av_block_degree="third")
+    hr = np.full(50, 78.0)  # normal, ilaçsız trace olsa bile
+    result = apply_discrete_av_block(hr, patient, av_sensitive_drug_present=False)
+    assert np.all(result == AV_BLOCK_ESCAPE_RHYTHM_HR)
+
+
+def test_run_monte_carlo_third_degree_av_block_patient_produces_escape_rhythm():
+    patients = load_patients("configs/patients.yaml")
+    drugs = load_drugs("configs/drugs.yaml")
+    patient = replace(patients["hasta_a"], known_av_block_degree="third")
+    drug = drugs["beta_bloker"]
+
+    result = run_monte_carlo(patient, drug, n_realizations=10)
+    assert np.all(result.hr_runs == AV_BLOCK_ESCAPE_RHYTHM_HR)
+
+
+def test_run_polypharmacy_simulation_hyperkalemic_av_combo_triggers_block():
+    patients = load_patients("configs/patients.yaml")
+    drugs = load_drugs("configs/drugs.yaml")
+    patient = replace(patients["hasta_a"], potassium_mEqL=8.0)
+    combo = [drugs["beta_bloker"], drugs["digoxin"]]
+
+    result = run_polypharmacy_simulation(patient, combo, n_realizations=30)
+    # en azından bazı denemelerde/zaman noktalarında kaçış ritmine düşülmüş olmalı
+    assert np.any(result.hr_runs == AV_BLOCK_ESCAPE_RHYTHM_HR)
+
+
+def test_run_polypharmacy_simulation_healthy_patient_never_triggers_block():
+    """Regresyon: sağlıklı hastada (normal K+) hiçbir zaman ESCAPE_RHYTHM_HR görülmemeli."""
+    patients = load_patients("configs/patients.yaml")
+    drugs = load_drugs("configs/drugs.yaml")
+    patient = patients["hasta_a"]
+    combo = [drugs["beta_bloker"], drugs["digoxin"]]
+
+    result = run_polypharmacy_simulation(patient, combo, n_realizations=30)
+    assert not np.any(result.hr_runs == AV_BLOCK_ESCAPE_RHYTHM_HR)
+
+
+def test_patient_known_av_block_degree_defaults_to_none():
+    patients = load_patients("configs/patients.yaml")
+    for patient in patients.values():
+        assert patient.known_av_block_degree is None
+
+
+# --- CircAdapt entegrasyonu -- discrete AV blok ön-kontrolü ---
+
+
+def test_cumulative_av_conduction_multiplier_normal_patient_no_drug():
+    import integrate_drug_with_circadapt as idc
+    patients = load_patients("configs/patients.yaml")
+    patient = patients["hasta_a"]
+    m = idc.cumulative_av_conduction_multiplier(patient, [], [])
+    assert m == pytest.approx(1.0)
+
+
+def test_run_comparison_circadapt_never_called_when_threshold_exceeded(monkeypatch):
+    """CircAdapt'in eşik-üstü bir çarpanla HİÇ ÇAĞRILMADIĞINI (mock/spy) kanıtlar."""
+    import integrate_drug_with_circadapt as idc
+
+    patients = load_patients("configs/patients.yaml")
+    drugs = load_drugs("configs/drugs.yaml")
+    patient = replace(patients["hasta_a"], potassium_mEqL=6.5, known_av_block_degree="third")
+    drug = drugs["beta_bloker"]
+
+    call_count = {"n": 0}
+    original_run_with_drug = idc.run_with_drug
+
+    def spy_run_with_drug(*args, **kwargs):
+        call_count["n"] += 1
+        return original_run_with_drug(*args, **kwargs)
+
+    monkeypatch.setattr(idc, "run_with_drug", spy_run_with_drug)
+
+    result = idc.run_comparison(patient, drug)
+
+    assert call_count["n"] == 0  # run_with_drug (CircAdapt'i mutasyona uğratan yol) hiç çağrılmadı
+    assert result["av_block_triggered"] is True
+    assert result["hr_drug_model"] == pytest.approx(AV_BLOCK_ESCAPE_RHYTHM_HR)
+    assert result["tau_av_drug_ms"] is None
+
+
+def test_run_comparison_av_block_triggered_p_drug_v_drug_are_fully_nan_not_baseline_copy():
+    """
+    av_block_triggered=True olduğunda p_drug/v_drug, baseline eğrilerinin
+    KOPYASI DEĞİL -- tamamen np.nan olmalı (yanıltıcı bir yer tutucu
+    olmasın diye). streamlit_app.py'nin heart.get("av_block_triggered")
+    kontrolü tam olarak bu veri sözleşmesine dayanıyor -- bkz. tab_heart
+    ve "Dünya Modelini Gözlemle" sekmelerindeki av_block_triggered dalları
+    (orada .max()/.min() hiç çağrılmıyor, bunun yerine bir uyarı mesajı
+    gösteriliyor -- Streamlit çalışma zamanı gerektirdiği için burada
+    UI'ın kendisi değil, dayandığı veri sözleşmesi test ediliyor).
+    """
+    import integrate_drug_with_circadapt as idc
+
+    patients = load_patients("configs/patients.yaml")
+    drugs = load_drugs("configs/drugs.yaml")
+    patient = replace(patients["hasta_a"], known_av_block_degree="third")
+    drug = drugs["beta_bloker"]
+
+    result = idc.run_comparison(patient, drug)
+
+    assert result["av_block_triggered"] is True
+    assert np.all(np.isnan(result["p_drug"]))
+    assert np.all(np.isnan(result["v_drug"]))
+    assert result["p_drug"].shape == result["p_base"].shape
+    assert result["v_drug"].shape == result["v_base"].shape
+    # baseline kendisi HÂLÂ geçerli/gerçek veri olmalı (sadece "ilaçlı" taraf boş)
+    assert not np.any(np.isnan(result["p_base"]))
+    assert not np.any(np.isnan(result["v_base"]))
+
+
+def test_run_polypharmacy_comparison_av_block_triggered_p_drug_v_drug_are_fully_nan():
+    import integrate_drug_with_circadapt as idc
+
+    patients = load_patients("configs/patients.yaml")
+    drugs = load_drugs("configs/drugs.yaml")
+    patient = replace(patients["hasta_a"], known_av_block_degree="third")
+    combo = [drugs["beta_bloker"], drugs["digoxin"]]
+
+    result = idc.run_polypharmacy_comparison(patient, combo)
+
+    assert result["av_block_triggered"] is True
+    assert np.all(np.isnan(result["p_drug"]))
+    assert np.all(np.isnan(result["v_drug"]))
+
+
+def test_run_comparison_normal_patient_still_calls_circadapt_and_av_block_false(monkeypatch):
+    import integrate_drug_with_circadapt as idc
+
+    patients = load_patients("configs/patients.yaml")
+    drugs = load_drugs("configs/drugs.yaml")
+    patient = patients["hasta_a"]
+    drug = drugs["beta_bloker"]
+
+    call_count = {"n": 0}
+    original_run_with_drug = idc.run_with_drug
+
+    def spy_run_with_drug(*args, **kwargs):
+        call_count["n"] += 1
+        return original_run_with_drug(*args, **kwargs)
+
+    monkeypatch.setattr(idc, "run_with_drug", spy_run_with_drug)
+
+    result = idc.run_comparison(patient, drug)
+
+    assert call_count["n"] == 1
+    assert result["av_block_triggered"] is False
+    assert result["tau_av_drug_ms"] is not None
+
+
+# --- Nitroprussid EC50 -- pediatrik Css=R/Cl türetmesi (Gregoire ve ark., PMC4516882) ---
+
+
+def test_sodium_nitroprusside_ec50_matches_hand_calculated_css_over_cl():
+    """
+    Elle hesap: ER50 alt-gruplarının ortalaması (0.34+0.103)/2=0.2215 mcg/kg/dk
+    -> R=0.01329 mg/kg/saat -> Cl=ke_mean*vd_per_kg=20.79*0.2=4.158 L/saat/kg
+    -> EC50=R/Cl -- kodun configs/drugs.yaml'a yazdığı değerle (0.0032, 2 basamağa
+    yuvarlanmış) eşleşmeli.
+    """
+    drugs = load_drugs("configs/drugs.yaml")
+    nitro = drugs["sodium_nitroprusside"]
+
+    er50_mcg_kg_min = (0.34 + 0.103) / 2
+    R_mg_kg_hr = er50_mcg_kg_min * 60 / 1000
+    Cl_L_hr_kg = nitro.ke_mean * nitro.vd_per_kg
+    expected_ec50 = R_mg_kg_hr / Cl_L_hr_kg
+
+    assert nitro.ke_mean == pytest.approx(20.79)
+    assert nitro.vd_per_kg == pytest.approx(0.2)
+    assert expected_ec50 == pytest.approx(0.0031962, abs=1e-6)
+    assert nitro.ec50 == pytest.approx(expected_ec50, abs=1e-4)

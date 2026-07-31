@@ -1,0 +1,181 @@
+[2026-07-31 04:09:40] ===== KOSUM BASLIYOR: 260data_seed0 (data=data/transient_dataset_large_backup_260, out=models/dynamics_jepa_transient_1560run_260data_seed0) =====
+[2026-07-31 04:09:40] BASLIYOR: 260data_seed0::3a_train_jepa :: .venv\Scripts\python.exe -m worldmodel.learned_dynamics.train_jepa_transient --data data/transient_dataset_large_backup_260 --out-dir models/dynamics_jepa_transient_1560run_260data_seed0 --epochs 200 --seed 0
+[2026-07-31 04:10:28] BITTI (47.3s, exit=0): 260data_seed0::3a_train_jepa
+--- son satirlar ---
+Epoch 197/200 | train_loss=0.0044 | val_loss=0.0024 | embedding_std=3.938 (collapse uyar� e�i�i: <0.1)
+Epoch 198/200 | train_loss=0.0039 | val_loss=0.0028 | embedding_std=3.947 (collapse uyar� e�i�i: <0.1)
+Epoch 199/200 | train_loss=0.0031 | val_loss=0.0024 | embedding_std=3.959 (collapse uyar� e�i�i: <0.1)
+Epoch 200/200 | train_loss=0.0031 | val_loss=0.0025 | embedding_std=3.934 (collapse uyar� e�i�i: <0.1)
+
+En iyi val_loss=0.0002 -- checkpoint'ler models/dynamics_jepa_transient_1560run_260data_seed0 i�ine kaydedildi.
+[2026-07-31 04:10:28] 260data_seed0: 3a snapshot alindi -> models/dynamics_jepa_transient_1560run_260data_seed0_stage3a_snapshot
+[2026-07-31 04:10:28] BASLIYOR: 260data_seed0::3b_finetune_rollout :: .venv\Scripts\python.exe -m worldmodel.learned_dynamics.finetune_rollout --data data/transient_dataset_large_backup_260 --model-dir models/dynamics_jepa_transient_1560run_260data_seed0 --epochs 300 --rollout-horizon 16
+[2026-07-31 04:10:39] BITTI (11.7s, exit=0): 260data_seed0::3b_finetune_rollout
+--- son satirlar ---
+Epoch  240/300 | rollout_train_loss=0.3292 | rollout_val_loss=0.0422
+Epoch  260/300 | rollout_train_loss=0.3153 | rollout_val_loss=0.0402
+Epoch  280/300 | rollout_train_loss=0.3022 | rollout_val_loss=0.0386
+Epoch  300/300 | rollout_train_loss=0.2897 | rollout_val_loss=0.0374
+
+En iyi rollout_val_loss=0.0374 -- encoder.pt/predictor.pt models/dynamics_jepa_transient_1560run_260data_seed0 i�inde �NCE-AYARLI h�lleriyle G�NCELLEND� (decoder.pt AYRICA yeniden e�itilmeli -- embedding uzay� de�i�ti).
+[2026-07-31 04:10:39] BASLIYOR: 260data_seed0::3c_train_decoder :: .venv\Scripts\python.exe -m worldmodel.learned_dynamics.train_decoder_transient --data data/transient_dataset_large_backup_260 --model-dir models/dynamics_jepa_transient_1560run_260data_seed0 --epochs 60 --seed 0
+[2026-07-31 04:10:52] BITTI (13.0s, exit=0): 260data_seed0::3c_train_decoder
+--- son satirlar ---
+Epoch  30/60 | train_loss=0.3870 | val_loss=0.4742
+Epoch  40/60 | train_loss=0.3891 | val_loss=0.4752
+Epoch  50/60 | train_loss=0.3730 | val_loss=0.4758
+Epoch  60/60 | train_loss=0.3850 | val_loss=0.4707
+
+En iyi val_loss=0.4707 -- decoder.pt models/dynamics_jepa_transient_1560run_260data_seed0 i�ine kaydedildi.
+[2026-07-31 04:10:52] ===== KOSUM TAMAMLANDI: 260data_seed0 (3a=47s 3b=12s 3c=13s) =====
+[2026-07-31 04:10:52] ===== KOSUM BASLIYOR: 260data_seed1 (data=data/transient_dataset_large_backup_260, out=models/dynamics_jepa_transient_1560run_260data_seed1) =====
+[2026-07-31 04:10:52] BASLIYOR: 260data_seed1::3a_train_jepa :: .venv\Scripts\python.exe -m worldmodel.learned_dynamics.train_jepa_transient --data data/transient_dataset_large_backup_260 --out-dir models/dynamics_jepa_transient_1560run_260data_seed1 --epochs 200 --seed 1
+[2026-07-31 04:11:37] BITTI (44.4s, exit=0): 260data_seed1::3a_train_jepa
+--- son satirlar ---
+Epoch 197/200 | train_loss=0.0010 | val_loss=0.0008 | embedding_std=2.818 (collapse uyar� e�i�i: <0.1)
+Epoch 198/200 | train_loss=0.0010 | val_loss=0.0009 | embedding_std=2.828 (collapse uyar� e�i�i: <0.1)
+Epoch 199/200 | train_loss=0.0017 | val_loss=0.0009 | embedding_std=2.823 (collapse uyar� e�i�i: <0.1)
+Epoch 200/200 | train_loss=0.0015 | val_loss=0.0009 | embedding_std=2.813 (collapse uyar� e�i�i: <0.1)
+
+En iyi val_loss=0.0002 -- checkpoint'ler models/dynamics_jepa_transient_1560run_260data_seed1 i�ine kaydedildi.
+[2026-07-31 04:11:37] 260data_seed1: 3a snapshot alindi -> models/dynamics_jepa_transient_1560run_260data_seed1_stage3a_snapshot
+[2026-07-31 04:11:37] BASLIYOR: 260data_seed1::3b_finetune_rollout :: .venv\Scripts\python.exe -m worldmodel.learned_dynamics.finetune_rollout --data data/transient_dataset_large_backup_260 --model-dir models/dynamics_jepa_transient_1560run_260data_seed1 --epochs 300 --rollout-horizon 16
+[2026-07-31 04:11:48] BITTI (11.4s, exit=0): 260data_seed1::3b_finetune_rollout
+--- son satirlar ---
+Epoch  240/300 | rollout_train_loss=0.3685 | rollout_val_loss=0.0251
+Epoch  260/300 | rollout_train_loss=0.3483 | rollout_val_loss=0.0247
+Epoch  280/300 | rollout_train_loss=0.3289 | rollout_val_loss=0.0245
+Epoch  300/300 | rollout_train_loss=0.3102 | rollout_val_loss=0.0245
+
+En iyi rollout_val_loss=0.0245 -- encoder.pt/predictor.pt models/dynamics_jepa_transient_1560run_260data_seed1 i�inde �NCE-AYARLI h�lleriyle G�NCELLEND� (decoder.pt AYRICA yeniden e�itilmeli -- embedding uzay� de�i�ti).
+[2026-07-31 04:11:48] BASLIYOR: 260data_seed1::3c_train_decoder :: .venv\Scripts\python.exe -m worldmodel.learned_dynamics.train_decoder_transient --data data/transient_dataset_large_backup_260 --model-dir models/dynamics_jepa_transient_1560run_260data_seed1 --epochs 60 --seed 1
+[2026-07-31 04:12:01] BITTI (13.1s, exit=0): 260data_seed1::3c_train_decoder
+--- son satirlar ---
+Epoch  30/60 | train_loss=0.4021 | val_loss=0.5349
+Epoch  40/60 | train_loss=0.3852 | val_loss=0.5307
+Epoch  50/60 | train_loss=0.3862 | val_loss=0.5261
+Epoch  60/60 | train_loss=0.3772 | val_loss=0.5365
+
+En iyi val_loss=0.5141 -- decoder.pt models/dynamics_jepa_transient_1560run_260data_seed1 i�ine kaydedildi.
+[2026-07-31 04:12:01] ===== KOSUM TAMAMLANDI: 260data_seed1 (3a=44s 3b=11s 3c=13s) =====
+[2026-07-31 04:12:01] ===== KOSUM BASLIYOR: 260data_seed2 (data=data/transient_dataset_large_backup_260, out=models/dynamics_jepa_transient_1560run_260data_seed2) =====
+[2026-07-31 04:12:01] BASLIYOR: 260data_seed2::3a_train_jepa :: .venv\Scripts\python.exe -m worldmodel.learned_dynamics.train_jepa_transient --data data/transient_dataset_large_backup_260 --out-dir models/dynamics_jepa_transient_1560run_260data_seed2 --epochs 200 --seed 2
+[2026-07-31 04:12:46] BITTI (44.4s, exit=0): 260data_seed2::3a_train_jepa
+--- son satirlar ---
+Epoch 197/200 | train_loss=0.0013 | val_loss=0.0009 | embedding_std=2.864 (collapse uyar� e�i�i: <0.1)
+Epoch 198/200 | train_loss=0.0017 | val_loss=0.0010 | embedding_std=2.863 (collapse uyar� e�i�i: <0.1)
+Epoch 199/200 | train_loss=0.0012 | val_loss=0.0009 | embedding_std=2.848 (collapse uyar� e�i�i: <0.1)
+Epoch 200/200 | train_loss=0.0012 | val_loss=0.0011 | embedding_std=2.864 (collapse uyar� e�i�i: <0.1)
+
+En iyi val_loss=0.0001 -- checkpoint'ler models/dynamics_jepa_transient_1560run_260data_seed2 i�ine kaydedildi.
+[2026-07-31 04:12:46] 260data_seed2: 3a snapshot alindi -> models/dynamics_jepa_transient_1560run_260data_seed2_stage3a_snapshot
+[2026-07-31 04:12:46] BASLIYOR: 260data_seed2::3b_finetune_rollout :: .venv\Scripts\python.exe -m worldmodel.learned_dynamics.finetune_rollout --data data/transient_dataset_large_backup_260 --model-dir models/dynamics_jepa_transient_1560run_260data_seed2 --epochs 300 --rollout-horizon 16
+[2026-07-31 04:12:57] BITTI (11.4s, exit=0): 260data_seed2::3b_finetune_rollout
+--- son satirlar ---
+Epoch  240/300 | rollout_train_loss=0.3523 | rollout_val_loss=0.0296
+Epoch  260/300 | rollout_train_loss=0.3343 | rollout_val_loss=0.0285
+Epoch  280/300 | rollout_train_loss=0.3165 | rollout_val_loss=0.0277
+Epoch  300/300 | rollout_train_loss=0.2997 | rollout_val_loss=0.0270
+
+En iyi rollout_val_loss=0.0270 -- encoder.pt/predictor.pt models/dynamics_jepa_transient_1560run_260data_seed2 i�inde �NCE-AYARLI h�lleriyle G�NCELLEND� (decoder.pt AYRICA yeniden e�itilmeli -- embedding uzay� de�i�ti).
+[2026-07-31 04:12:57] BASLIYOR: 260data_seed2::3c_train_decoder :: .venv\Scripts\python.exe -m worldmodel.learned_dynamics.train_decoder_transient --data data/transient_dataset_large_backup_260 --model-dir models/dynamics_jepa_transient_1560run_260data_seed2 --epochs 60 --seed 2
+[2026-07-31 04:13:10] BITTI (13.0s, exit=0): 260data_seed2::3c_train_decoder
+--- son satirlar ---
+Epoch  30/60 | train_loss=0.3965 | val_loss=0.4794
+Epoch  40/60 | train_loss=0.3877 | val_loss=0.4806
+Epoch  50/60 | train_loss=0.3904 | val_loss=0.4830
+Epoch  60/60 | train_loss=0.3806 | val_loss=0.4785
+
+En iyi val_loss=0.4765 -- decoder.pt models/dynamics_jepa_transient_1560run_260data_seed2 i�ine kaydedildi.
+[2026-07-31 04:13:10] ===== KOSUM TAMAMLANDI: 260data_seed2 (3a=44s 3b=11s 3c=13s) =====
+[2026-07-31 04:13:10] ===== KOSUM BASLIYOR: 1560data_seed0 (data=data/transient_dataset_large, out=models/dynamics_jepa_transient_1560run_1560data_seed0) =====
+[2026-07-31 04:13:10] BASLIYOR: 1560data_seed0::3a_train_jepa :: .venv\Scripts\python.exe -m worldmodel.learned_dynamics.train_jepa_transient --data data/transient_dataset_large --out-dir models/dynamics_jepa_transient_1560run_1560data_seed0 --epochs 200 --seed 0
+[2026-07-31 04:18:03] BITTI (293.0s, exit=0): 1560data_seed0::3a_train_jepa
+--- son satirlar ---
+Epoch 197/200 | train_loss=0.0010 | val_loss=0.0003 | embedding_std=4.037 (collapse uyar� e�i�i: <0.1)
+Epoch 198/200 | train_loss=0.0012 | val_loss=0.0005 | embedding_std=4.025 (collapse uyar� e�i�i: <0.1)
+Epoch 199/200 | train_loss=0.0012 | val_loss=0.0005 | embedding_std=4.028 (collapse uyar� e�i�i: <0.1)
+Epoch 200/200 | train_loss=0.0010 | val_loss=0.0003 | embedding_std=4.027 (collapse uyar� e�i�i: <0.1)
+
+En iyi val_loss=0.0003 -- checkpoint'ler models/dynamics_jepa_transient_1560run_1560data_seed0 i�ine kaydedildi.
+[2026-07-31 04:18:03] 1560data_seed0: 3a snapshot alindi -> models/dynamics_jepa_transient_1560run_1560data_seed0_stage3a_snapshot
+[2026-07-31 04:18:03] BASLIYOR: 1560data_seed0::3b_finetune_rollout :: .venv\Scripts\python.exe -m worldmodel.learned_dynamics.finetune_rollout --data data/transient_dataset_large --model-dir models/dynamics_jepa_transient_1560run_1560data_seed0 --epochs 300 --rollout-horizon 16
+[2026-07-31 04:18:29] BITTI (26.1s, exit=0): 1560data_seed0::3b_finetune_rollout
+--- son satirlar ---
+Epoch  240/300 | rollout_train_loss=0.0010 | rollout_val_loss=0.0007
+Epoch  260/300 | rollout_train_loss=0.0009 | rollout_val_loss=0.0007
+Epoch  280/300 | rollout_train_loss=0.0009 | rollout_val_loss=0.0007
+Epoch  300/300 | rollout_train_loss=0.0009 | rollout_val_loss=0.0007
+
+En iyi rollout_val_loss=0.0007 -- encoder.pt/predictor.pt models/dynamics_jepa_transient_1560run_1560data_seed0 i�inde �NCE-AYARLI h�lleriyle G�NCELLEND� (decoder.pt AYRICA yeniden e�itilmeli -- embedding uzay� de�i�ti).
+[2026-07-31 04:18:29] BASLIYOR: 1560data_seed0::3c_train_decoder :: .venv\Scripts\python.exe -m worldmodel.learned_dynamics.train_decoder_transient --data data/transient_dataset_large --model-dir models/dynamics_jepa_transient_1560run_1560data_seed0 --epochs 60 --seed 0
+[2026-07-31 04:19:38] BITTI (68.9s, exit=0): 1560data_seed0::3c_train_decoder
+--- son satirlar ---
+Epoch  30/60 | train_loss=0.3997 | val_loss=0.5319
+Epoch  40/60 | train_loss=0.3948 | val_loss=0.5113
+Epoch  50/60 | train_loss=0.3940 | val_loss=0.5251
+Epoch  60/60 | train_loss=0.3929 | val_loss=0.5098
+
+En iyi val_loss=0.4911 -- decoder.pt models/dynamics_jepa_transient_1560run_1560data_seed0 i�ine kaydedildi.
+[2026-07-31 04:19:38] ===== KOSUM TAMAMLANDI: 1560data_seed0 (3a=293s 3b=26s 3c=69s) =====
+[2026-07-31 04:19:38] ===== KOSUM BASLIYOR: 1560data_seed1 (data=data/transient_dataset_large, out=models/dynamics_jepa_transient_1560run_1560data_seed1) =====
+[2026-07-31 04:19:38] BASLIYOR: 1560data_seed1::3a_train_jepa :: .venv\Scripts\python.exe -m worldmodel.learned_dynamics.train_jepa_transient --data data/transient_dataset_large --out-dir models/dynamics_jepa_transient_1560run_1560data_seed1 --epochs 200 --seed 1
+[2026-07-31 04:24:28] BITTI (290.4s, exit=0): 1560data_seed1::3a_train_jepa
+--- son satirlar ---
+Epoch 197/200 | train_loss=0.0007 | val_loss=0.0002 | embedding_std=3.134 (collapse uyar� e�i�i: <0.1)
+Epoch 198/200 | train_loss=0.0009 | val_loss=0.0002 | embedding_std=3.136 (collapse uyar� e�i�i: <0.1)
+Epoch 199/200 | train_loss=0.0008 | val_loss=0.0004 | embedding_std=3.140 (collapse uyar� e�i�i: <0.1)
+Epoch 200/200 | train_loss=0.0006 | val_loss=0.0003 | embedding_std=3.142 (collapse uyar� e�i�i: <0.1)
+
+En iyi val_loss=0.0002 -- checkpoint'ler models/dynamics_jepa_transient_1560run_1560data_seed1 i�ine kaydedildi.
+[2026-07-31 04:24:28] 1560data_seed1: 3a snapshot alindi -> models/dynamics_jepa_transient_1560run_1560data_seed1_stage3a_snapshot
+[2026-07-31 04:24:28] BASLIYOR: 1560data_seed1::3b_finetune_rollout :: .venv\Scripts\python.exe -m worldmodel.learned_dynamics.finetune_rollout --data data/transient_dataset_large --model-dir models/dynamics_jepa_transient_1560run_1560data_seed1 --epochs 300 --rollout-horizon 16
+[2026-07-31 04:24:54] BITTI (25.3s, exit=0): 1560data_seed1::3b_finetune_rollout
+--- son satirlar ---
+Epoch  240/300 | rollout_train_loss=0.0006 | rollout_val_loss=0.0005
+Epoch  260/300 | rollout_train_loss=0.0006 | rollout_val_loss=0.0005
+Epoch  280/300 | rollout_train_loss=0.0006 | rollout_val_loss=0.0005
+Epoch  300/300 | rollout_train_loss=0.0006 | rollout_val_loss=0.0005
+
+En iyi rollout_val_loss=0.0005 -- encoder.pt/predictor.pt models/dynamics_jepa_transient_1560run_1560data_seed1 i�inde �NCE-AYARLI h�lleriyle G�NCELLEND� (decoder.pt AYRICA yeniden e�itilmeli -- embedding uzay� de�i�ti).
+[2026-07-31 04:24:54] BASLIYOR: 1560data_seed1::3c_train_decoder :: .venv\Scripts\python.exe -m worldmodel.learned_dynamics.train_decoder_transient --data data/transient_dataset_large --model-dir models/dynamics_jepa_transient_1560run_1560data_seed1 --epochs 60 --seed 1
+[2026-07-31 04:26:03] BITTI (69.1s, exit=0): 1560data_seed1::3c_train_decoder
+--- son satirlar ---
+Epoch  30/60 | train_loss=0.4005 | val_loss=0.4893
+Epoch  40/60 | train_loss=0.3998 | val_loss=0.4966
+Epoch  50/60 | train_loss=0.3973 | val_loss=0.4851
+Epoch  60/60 | train_loss=0.3944 | val_loss=0.5011
+
+En iyi val_loss=0.4804 -- decoder.pt models/dynamics_jepa_transient_1560run_1560data_seed1 i�ine kaydedildi.
+[2026-07-31 04:26:03] ===== KOSUM TAMAMLANDI: 1560data_seed1 (3a=290s 3b=25s 3c=69s) =====
+[2026-07-31 04:26:03] ===== KOSUM BASLIYOR: 1560data_seed2 (data=data/transient_dataset_large, out=models/dynamics_jepa_transient_1560run_1560data_seed2) =====
+[2026-07-31 04:26:03] BASLIYOR: 1560data_seed2::3a_train_jepa :: .venv\Scripts\python.exe -m worldmodel.learned_dynamics.train_jepa_transient --data data/transient_dataset_large --out-dir models/dynamics_jepa_transient_1560run_1560data_seed2 --epochs 200 --seed 2
+[2026-07-31 04:30:54] BITTI (290.9s, exit=0): 1560data_seed2::3a_train_jepa
+--- son satirlar ---
+Epoch 197/200 | train_loss=0.0026 | val_loss=0.0005 | embedding_std=4.674 (collapse uyar� e�i�i: <0.1)
+Epoch 198/200 | train_loss=0.0021 | val_loss=0.0007 | embedding_std=4.671 (collapse uyar� e�i�i: <0.1)
+Epoch 199/200 | train_loss=0.0015 | val_loss=0.0005 | embedding_std=4.681 (collapse uyar� e�i�i: <0.1)
+Epoch 200/200 | train_loss=0.0016 | val_loss=0.0007 | embedding_std=4.682 (collapse uyar� e�i�i: <0.1)
+
+En iyi val_loss=0.0004 -- checkpoint'ler models/dynamics_jepa_transient_1560run_1560data_seed2 i�ine kaydedildi.
+[2026-07-31 04:30:54] 1560data_seed2: 3a snapshot alindi -> models/dynamics_jepa_transient_1560run_1560data_seed2_stage3a_snapshot
+[2026-07-31 04:30:54] BASLIYOR: 1560data_seed2::3b_finetune_rollout :: .venv\Scripts\python.exe -m worldmodel.learned_dynamics.finetune_rollout --data data/transient_dataset_large --model-dir models/dynamics_jepa_transient_1560run_1560data_seed2 --epochs 300 --rollout-horizon 16
+[2026-07-31 04:31:20] BITTI (25.9s, exit=0): 1560data_seed2::3b_finetune_rollout
+--- son satirlar ---
+Epoch  240/300 | rollout_train_loss=0.0016 | rollout_val_loss=0.0011
+Epoch  260/300 | rollout_train_loss=0.0015 | rollout_val_loss=0.0011
+Epoch  280/300 | rollout_train_loss=0.0015 | rollout_val_loss=0.0011
+Epoch  300/300 | rollout_train_loss=0.0015 | rollout_val_loss=0.0011
+
+En iyi rollout_val_loss=0.0011 -- encoder.pt/predictor.pt models/dynamics_jepa_transient_1560run_1560data_seed2 i�inde �NCE-AYARLI h�lleriyle G�NCELLEND� (decoder.pt AYRICA yeniden e�itilmeli -- embedding uzay� de�i�ti).
+[2026-07-31 04:31:20] BASLIYOR: 1560data_seed2::3c_train_decoder :: .venv\Scripts\python.exe -m worldmodel.learned_dynamics.train_decoder_transient --data data/transient_dataset_large --model-dir models/dynamics_jepa_transient_1560run_1560data_seed2 --epochs 60 --seed 2
+[2026-07-31 04:32:31] BITTI (71.7s, exit=0): 1560data_seed2::3c_train_decoder
+--- son satirlar ---
+Epoch  30/60 | train_loss=0.4071 | val_loss=0.5032
+Epoch  40/60 | train_loss=0.4030 | val_loss=0.4968
+Epoch  50/60 | train_loss=0.3979 | val_loss=0.4924
+Epoch  60/60 | train_loss=0.3965 | val_loss=0.5265
+
+En iyi val_loss=0.4866 -- decoder.pt models/dynamics_jepa_transient_1560run_1560data_seed2 i�ine kaydedildi.
+[2026-07-31 04:32:31] ===== KOSUM TAMAMLANDI: 1560data_seed2 (3a=291s 3b=26s 3c=72s) =====
+[2026-07-31 04:32:31] TUM KOSUMLAR BITTI. Toplam sure: 22.8 dk

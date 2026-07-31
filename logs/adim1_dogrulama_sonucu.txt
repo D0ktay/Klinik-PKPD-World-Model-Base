@@ -1,0 +1,13 @@
+Toplam satir: 26520
+NaN/Inf taramasi: TEMIZ (skaler alanlarda hic NaN/Inf yok)
+traj_p: shape=(26520, 100)  NaN=0  Inf=0
+traj_p: tum satirlar 100 nokta mi: True
+traj_v: shape=(26520, 100)  NaN=0  Inf=0
+traj_v: tum satirlar 100 nokta mi: True
+conc_mg_L: min=0.0000 max=0.3251 negatif_sayisi=0
+13 test hastasi hala 'test' mi: True
+13 val hastasi hala 'val' mi: True
+i>=130 hepsi 'train' mi: True
+SPLIT DOGRULAMA: GECTI
+Kesilen (truncated) trajectory sayisi: 0 / 1560
+Trajectory basina kare sayisi dagilimi: {17: 1560}

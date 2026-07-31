@@ -48,7 +48,24 @@ beta_bloker:
   vd_central_per_kg: 0.5    # VARSAYIM (bkz. yukarı)
   emax_hr: 25
   emax_sbp: 20
-  ec50: 0.03
+  # ec50: Faz 3 kalibrasyonu (📚 kısmen literatür -- TÜRETİLMİŞ, doğrudan
+  # ölçülmüş DEĞİL). Reilly ve ark. (esmolol PD çalışması, Eur J Clin
+  # Pharmacol) egzersiz sırasında nabız azalmasının EC50'sini İNFÜZYON
+  # HIZI cinsinden veriyor: 113 mcg/kg/dk. Bizim modelimiz EC50'yi PLAZMA
+  # KONSANTRASYONU (mg/L) cinsinden istediği için, kararlı-durum (steady-
+  # state) ilişkisiyle (Css = infüzyon_hızı / klerens) dönüştürüldü:
+  #   113 mcg/kg/dk * 60 = 6.78 mg/kg/saat
+  #   klerens (CL = ke_mean * vd_per_kg) = 4.6 * 2.0 = 9.2 L/saat/kg
+  #     (CL'nin kendisi de yukarıdaki ka/ke_mean/vd_per_kg gibi gerçek
+  #     literatürden -- Wiest 1991 -- geliyor, bkz. README.md)
+  #   EC50 = 6.78 / 9.2 ≈ 0.737 mg/L
+  # Önceki temsili değer (0.03 mg/L) ~24 kat daha düşüktü. DÜRÜST KISIT:
+  # bu bir TÜRETME (infüzyon-hızı EC50'sini konsantrasyona çevirme), o
+  # çalışmada doğrudan ÖLÇÜLMÜŞ bir plazma-EC50 değeri değil -- ayrıca o
+  # çalışma EGZERSİZ sırasındaki nabız artışının BASKILANMASINI ölçüyor,
+  # bizim senaryomuz (dinlenim halindeki bazal nabzın düşürülmesi) birebir
+  # aynı değil. emax_hr/emax_sbp (büyüklük) hâlâ ⚠️ temsili.
+  ec50: 0.737
   # Etki bölgesi (Keo) gecikmeleri -- TEMSİLİ değerler, literatürden
   # değil. Mantık: kronotropi (nabız) beta-1 reseptörünün doğrudan, hızlı
   # etkisidir; tansiyon değişimi ise dolaylı/downstream bir hemodinamik
@@ -140,6 +157,73 @@ dobutamine:
   # dolaylı/downstream sonucu, daha gecikmeli.
   keo_hr: 15.0
   keo_sbp: 5.0
+  # SÜREKLİ İNFÜZYON PK modeli (bkz. pk.py > plasma_concentration_infusion) --
+  # dolduğu için artık yukarıdaki dose_mg/dose_mg_per_kg/ka (bolus-eşdeğeri
+  # YAKLAŞIKLIK) KULLANILMIYOR, ama geriye dönük uyumluluk için SİLİNMEDİ.
+  # 5.0 mcg/kg/dk, YUKARIDAKİ dose_mg_per_kg=0.037'nin zaten türetildiği
+  # "klasik 5 mcg/kg/dk infüzyon" hızıdır (~100 ng/mL kararlı-durum hedefi,
+  # pediatrik YBÜ çalışması) -- YENİ bir sayı DEĞİL, kod tabanında zaten var
+  # olan, önceden geriye-türetme için kullanılan aynı değer, şimdi DOĞRUDAN
+  # kullanılıyor.
+  infusion_rate_mcg_per_kg_min: 5.0
+  infusion_duration_hr: null   # sonsuz/sürekli infüzyon (klinikte izlem süresince kesilmez)
+
+sodium_nitroprusside:
+  # PK parametreleri configs/drugs_verified.yaml > sodium_nitroprusside'den
+  # BİREBİR KOPYALANMIŞTIR (hiçbir sayı yeniden türetilmedi/değiştirilmedi) --
+  # FDA etiketi (clinical_pharmacology): "circulatory half-life is about
+  # 2 minutes" ve dağılım hacminin "approximately coextensive with the
+  # extracellular space" olduğu belirtiliyor (vd_per_kg=0.2 L/kg, tipik
+  # ekstrasellüler sıvı hacmi -- doğrudan etiket metninden türetildi).
+  # ÖNEMLİ KISIT: nitroprussid klinikte SADECE sürekli IV infüzyon olarak
+  # verilir (0.3-10 mcg/kg/dk), bolus dozu yoktur -- dose_mg_per_kg,
+  # dobutamindeki gibi bir "bolus-eşdeğeri" YAKLAŞIKLIKTIR, gerçek bir
+  # klinik dozu temsil etmez. Etiket ayrıca "slight increases in heart
+  # rate" (hafif refleks taşikardi) ve hem arteriyel HEM venöz dilatasyon
+  # (nikardipinden farklı olarak hem önyük hem ardyük düşürür) belirtiyor.
+  display_name: "Sodyum Nitroprussid (literatür kalibrasyonlu, bolus-eşdeğeri yaklaşıklık)"
+  drug_class: "vasodilator"
+  dose_mg: 0.76                # referans ~76kg hasta için (0.01 mg/kg * 76kg)
+  dose_mg_per_kg: 0.01       # bolus-eşdeğeri YAKLAŞIKLIK (gerçek klinik dozu değil)
+  ka: 30.0                     # ~1.4 dk denge süresi (etiketteki "immediate" onset ile tutarlı, YAKLAŞIKLIK)
+  ke_mean: 20.79                  # t1/2 ~2 dk -> ln(2)/t1/2 (FDA etiketi, GERÇEK)
+  vd_per_kg: 0.2                     # ekstrasellüler sıvı hacmi (FDA etiketi, GERÇEK ifadeden türetildi)
+  emax_hr: -3         # hafif refleks taşikardi (FDA etiketi: "slight increases in heart rate")
+  emax_sbp: 40           # çok potent, hızlı titre edilebilir antihipertansif (FDA etiketi) -- ⚠️ HÂLÂ TEMSİLİ, aşağıdaki EC50 türetmesi Emax'ı içermiyor
+  # ec50: Gregoire ve ark. (PMC4516882, "A hemodynamic model to guide blood
+  # pressure control during deliberate hypotension with sodium nitroprusside
+  # in children") -- MAP (ortalama arter basıncı) için inhibitory sigmoidal
+  # Emax K-PD modeli. ER50 (Emax'ın yarısını üreten kararlı-durum infüzyon
+  # hızı) popülasyonu İKİ alt-gruba ayırıyor: yüksek-EC50 grubu 0.34
+  # mcg/kg/dk, düşük-EC50 grubu 0.103 mcg/kg/dk -- TEK bir değer değil.
+  # VARSAYIM: iki alt-grubun ARİTMETİK ORTALAMASI ((0.34+0.103)/2=0.2215
+  # mcg/kg/dk) tek bir temsili ER50 olarak kullanıldı -- popülasyon iki
+  # alt-gruba ayrılmışken tek nokta seçmek BİLGİ KAYBI yaratıyor, bu
+  # dürüstçe kabul edilen bir basitleştirme.
+  # Esmolol Faz 3'teki (§1a) AYNI Css=R/Cl dönüşümü uygulandı:
+  #   R = 0.2215 mcg/kg/dk × 60/1000 = 0.01329 mg/kg/saat
+  #   Cl = ke_mean × vd_per_kg = 20.79 × 0.2 = 4.158 L/saat/kg
+  #   EC50 = R / Cl ≈ 0.0032 mg/L   (önceki temsili değer: 0.011 mg/L)
+  # DÜRÜST KISITLAR (esmolol'dekinden DAHA ZAYIF bir güven kategorisinde --
+  # bkz. provenance.py): (1) kaynak popülasyon PEDİATRİK, bu proje YETİŞKİN
+  # hastaları simüle ediyor -- doğrudan bir yetişkin-pediatrik ekstrapolasyonu,
+  # esmolol'de olmayan EK bir varsayım katmanı; (2) iki alt-grubun ortalaması
+  # alınarak gerçek bir bimodal dağılım tek noktaya indirgendi; (3) kaynak
+  # MAP (ortalama arter basıncı) ölçtü, bizim emax_sbp'miz sistolik basıncı
+  # temsil ediyor -- birebir aynı ölçüt değil. emax_sbp/emax_hr (etkinin
+  # BÜYÜKLÜĞÜ) bu çalışmadan gelmedi, hâlâ ⚠️ temsili.
+  ec50: 0.0032
+  # SÜREKLİ İNFÜZYON PK modeli -- dolduğu için dose_mg/dose_mg_per_kg/ka
+  # (bolus-eşdeğeri YAKLAŞIKLIK) artık KULLANILMIYOR, geriye dönük uyumluluk
+  # için SİLİNMEDİ. infusion_rate_mcg_per_kg_min = 5.15 (FDA onaylı doz
+  # aralığının -- 0.3-10 mcg/kg/dk -- ORTANCASI). Bu, dobutamindeki 5.0
+  # mcg/kg/dk'nın aksine, gerçek bir doz-yanıt çalışmasından (Kessler 1987
+  # veya esmolol Faz 3 kalibrasyonu gibi) TÜRETİLMEDİ -- düzenleyici
+  # (regulatory) doz aralığından alınan tek-nokta temsili bir değer.
+  # nicardipine/dobutamine EC50'leriyle AYNI güven kategorisinde: ⚠️ temsili
+  # (bkz. CALIBRATION_REPORT.md Gap #4 notu).
+  infusion_rate_mcg_per_kg_min: 5.15
+  infusion_duration_hr: null   # sonsuz/sürekli infüzyon (klinikte izlem süresince kesilmez)
 
 digoxin:
   # PK parametreleri, farmakolojide en iyi bilinen/standart sabitlerden
@@ -166,6 +250,19 @@ digoxin:
   ka: 1.4                       # ~30 dk denge süresi varsayımı (YAKLAŞIKLIK)
   ke_mean: 0.01925                # t1/2 36 saat -> ln(2)/t1/2
   vd_per_kg: 7.3                    # standart ders kitabı değeri
+  # Faz 3 kalibrasyon girişimi (⚠️ SONUÇSUZ -- aşağıya bilinçli olarak
+  # not düşüldü, gelecekte tam-metin erişimi olan biri için başlangıç
+  # noktası): AV-düğümü/nabız-yavaşlatma etkisine özel bir EC50/Emax
+  # arandı ama serbestçe erişilebilir kaynaklarda bulunamadı. Bulunan TEK
+  # sayısal PD çalışması (PubMed 15032303, "Inotropic effect of digoxin
+  # in humans") İNOTROPİK (kasılma gücü) etkiyi ölçüyor -- bizim
+  # emax_hr'nin temsil ettiği AV-düğümü/kronotropik etki DEĞİL, farklı bir
+  # uç nokta/mekanizma. O çalışmanın tam metni (Springer, oturum açma
+  # gerektiriyor) bu oturumda erişilemedi, sadece özet okunabildi; özette
+  # "denge yarı-ömrü 13 saat" dışında sayısal EC50/Emax verilmiyor.
+  # SONUÇ: emax_hr/emax_sbp/ec50 hâlâ ⚠️ TEMSİLİ bırakıldı -- yanlış
+  # mekanizmadan (inotropi) ödünç alınan bir sayı, hiç sayı olmamasından
+  # daha yanıltıcı olurdu.
   emax_hr: 15         # negatif kronotrop (AV düğümü yavaşlatma -- pozitif değer, nabzı DÜŞÜRÜR)
   emax_sbp: 5           # digoksinin doğrudan BP etkisi minimal/değişken, küçük temsili değer
   ec50: 0.0008

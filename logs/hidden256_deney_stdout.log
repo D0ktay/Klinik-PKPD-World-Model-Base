@@ -1,0 +1,43 @@
+[2026-07-31 12:31:37] ===== h256_seed0 basliyor =====
+[2026-07-31 12:31:37] BASLIYOR: h256_seed0::jepa
+[2026-07-31 12:41:04] BITTI (567.3s, exit=0): h256_seed0::jepa
+Epoch 199/200 | train_loss=0.0007 | val_loss=0.0002 | embedding_std=3.676 (collapse uyar� e�i�i: <0.1)
+Epoch 200/200 | train_loss=0.0010 | val_loss=0.0002 | embedding_std=3.677 (collapse uyar� e�i�i: <0.1)
+
+En iyi val_loss=0.0002 -- checkpoint'ler models/dynamics_jepa_transient_1560run_h256_seed0 i�ine kaydedildi.
+[2026-07-31 12:41:04] BASLIYOR: h256_seed0::decoder
+[2026-07-31 12:43:17] BITTI (132.8s, exit=0): h256_seed0::decoder
+Epoch  50/60 | train_loss=0.4023 | val_loss=0.4787
+Epoch  60/60 | train_loss=0.3990 | val_loss=0.4790
+
+En iyi val_loss=0.4753 -- decoder.pt models/dynamics_jepa_transient_1560run_h256_seed0 i�ine kaydedildi.
+[2026-07-31 12:43:17] ===== h256_seed0 TAMAMLANDI =====
+[2026-07-31 12:43:17] ===== h256_seed1 basliyor =====
+[2026-07-31 12:43:17] BASLIYOR: h256_seed1::jepa
+[2026-07-31 12:52:24] BITTI (547.1s, exit=0): h256_seed1::jepa
+Epoch 199/200 | train_loss=0.0015 | val_loss=0.0004 | embedding_std=4.170 (collapse uyar� e�i�i: <0.1)
+Epoch 200/200 | train_loss=0.0015 | val_loss=0.0003 | embedding_std=4.152 (collapse uyar� e�i�i: <0.1)
+
+En iyi val_loss=0.0002 -- checkpoint'ler models/dynamics_jepa_transient_1560run_h256_seed1 i�ine kaydedildi.
+[2026-07-31 12:52:24] BASLIYOR: h256_seed1::decoder
+[2026-07-31 12:54:33] BITTI (128.8s, exit=0): h256_seed1::decoder
+Epoch  50/60 | train_loss=0.4035 | val_loss=0.4790
+Epoch  60/60 | train_loss=0.3992 | val_loss=0.4796
+
+En iyi val_loss=0.4757 -- decoder.pt models/dynamics_jepa_transient_1560run_h256_seed1 i�ine kaydedildi.
+[2026-07-31 12:54:33] ===== h256_seed1 TAMAMLANDI =====
+[2026-07-31 12:54:33] ===== h256_seed2 basliyor =====
+[2026-07-31 12:54:33] BASLIYOR: h256_seed2::jepa
+[2026-07-31 13:03:57] BITTI (564.4s, exit=0): h256_seed2::jepa
+Epoch 199/200 | train_loss=0.0013 | val_loss=0.0003 | embedding_std=4.965 (collapse uyar� e�i�i: <0.1)
+Epoch 200/200 | train_loss=0.0015 | val_loss=0.0006 | embedding_std=4.964 (collapse uyar� e�i�i: <0.1)
+
+En iyi val_loss=0.0002 -- checkpoint'ler models/dynamics_jepa_transient_1560run_h256_seed2 i�ine kaydedildi.
+[2026-07-31 13:03:57] BASLIYOR: h256_seed2::decoder
+[2026-07-31 13:06:19] BITTI (141.4s, exit=0): h256_seed2::decoder
+Epoch  50/60 | train_loss=0.4141 | val_loss=0.5121
+Epoch  60/60 | train_loss=0.4129 | val_loss=0.5180
+
+En iyi val_loss=0.4851 -- decoder.pt models/dynamics_jepa_transient_1560run_h256_seed2 i�ine kaydedildi.
+[2026-07-31 13:06:19] ===== h256_seed2 TAMAMLANDI =====
+[2026-07-31 13:06:19] TUM HIDDEN256 KOSUMLARI BITTI

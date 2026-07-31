@@ -19,6 +19,7 @@ from datetime import datetime
 import matplotlib
 from fpdf import FPDF
 
+from .patient import Drug
 from .provenance import provenance_report
 from .clinical_metrics import ejection_fraction, cardiac_output, classify_cardiac_function
 
@@ -84,21 +85,31 @@ def _matplotlib_fig_to_png_bytes(fig) -> bytes:
     return buf.read()
 
 
-def export_report(patient, drug, dose_rec: dict, mc_stats: dict,
+def export_report(patient, drugs, dose_rec: dict, mc_stats: dict,
                    heart_result: dict, chart_figures: list | None = None) -> bytes:
     """
     Simülasyon sonucunu PDF'e aktarır.
 
-    patient, drug: bu simülasyonda kullanılan Patient/Drug nesneleri
+    patient: bu simülasyonda kullanılan Patient nesnesi
+    drugs: tek bir Drug nesnesi (geriye dönük uyumluluk) VEYA bir
+        list[Drug] (polifarmasi -- N ilaç aynı anda verildiğinde). Tek Drug
+        verilirse içeride otomatik olarak tek elemanlı listeye çevrilir --
+        eski çağıranlar (tek ilaçlı akış) değişmeden çalışmaya devam eder.
     dose_rec: recommend_dose()'un döndürdüğü sözlük
     mc_stats: summarize()'ın döndürdüğü istatistiksel özet
-    heart_result: run_comparison()'ın döndürdüğü CircAdapt sonucu
+    heart_result: run_comparison() (tek ilaç) VEYA run_polypharmacy_comparison()
+        (N ilaç) tarafından döndürülen CircAdapt sonucu -- ikisi de aynı
+        şekilde "hr_drug_model"/"v_drug"/"p_drug" alanlarını taşıdığı için
+        (bkz. integrate_drug_with_circadapt.py) burada ayrım gerekmez.
     chart_figures: PDF'e gömülecek matplotlib Figure nesneleri (opsiyonel)
 
     Dönüş: PDF dosyasının ham bytes'ı (Streamlit'te st.download_button'a
     doğrudan verilebilir, ya da open(path, "wb").write(...) ile diske
     yazılabilir).
     """
+    if isinstance(drugs, Drug):
+        drugs = [drugs]
+
     pdf = _ClinicalReportPDF(format="A4")
     _add_unicode_fonts(pdf)
     pdf.set_auto_page_break(auto=True, margin=20)
@@ -139,18 +150,23 @@ def export_report(patient, drug, dose_rec: dict, mc_stats: dict,
 
     # --- İlaç Bilgileri ---
     pdf.set_font("Arial", "B", 13)
-    pdf.cell(0, 8, "İlaç Bilgileri", new_x="LMARGIN", new_y="NEXT")
+    title = "İlaç Bilgileri" if len(drugs) == 1 else f"İlaç Bilgileri ({len(drugs)} ilaç -- polifarmasi)"
+    pdf.cell(0, 8, title, new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Arial", "", 10)
-    drug_rows = [
-        ("İlaç", drug.display_name),
-        ("Sınıf", drug.drug_class or "-"),
-        ("Uygulanan doz", f"{drug.dose_mg:.2f} mg"),
-    ]
-    for label, value in drug_rows:
-        pdf.set_font("Arial", "B", 10)
-        pdf.cell(55, 6, label, new_x="RIGHT")
-        pdf.set_font("Arial", "", 10)
-        pdf.cell(0, 6, str(value), new_x="LMARGIN", new_y="NEXT")
+    for i, drug in enumerate(drugs):
+        if len(drugs) > 1:
+            pdf.set_font("Arial", "B", 10)
+            pdf.cell(0, 6, f"İlaç {i + 1}", new_x="LMARGIN", new_y="NEXT")
+        drug_rows = [
+            ("İlaç", drug.display_name),
+            ("Sınıf", drug.drug_class or "-"),
+            ("Uygulanan doz", f"{drug.dose_mg:.2f} mg"),
+        ]
+        for label, value in drug_rows:
+            pdf.set_font("Arial", "B", 10)
+            pdf.cell(55, 6, label, new_x="RIGHT")
+            pdf.set_font("Arial", "", 10)
+            pdf.cell(0, 6, str(value), new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
 
     # --- Simülasyon Özeti ---
@@ -163,8 +179,12 @@ def export_report(patient, drug, dose_rec: dict, mc_stats: dict,
     co_drug = cardiac_output(edv_drug, esv_drug, heart_result["hr_drug_model"])
     cls_drug = classify_cardiac_function(ef_drug, co_drug)
 
-    summary_rows = [
-        ("Önerilen doz", f"{dose_rec['dose_mg']:.1f} mg"),
+    # dose_rec boş olabilir (3+ ilaçlı polifarmasi -- doz önerisi hesaplanmıyor,
+    # bkz. streamlit_app.py) -- bu durumda "Önerilen doz" satırı atlanır.
+    summary_rows = []
+    if "dose_mg" in dose_rec:
+        summary_rows.append(("Önerilen doz", f"{dose_rec['dose_mg']:.1f} mg"))
+    summary_rows += [
         ("Bradikardi riski", f"%{mc_stats['pct_bradycardia_risk']:.1f}"),
         ("Ortalama en düşük nabız", f"{mc_stats['mean_min_hr']:.1f} bpm"),
         ("Mekanik risk (CircAdapt)", "Var" if dose_rec.get("mechanical_risk") else "Yok"),
@@ -174,6 +194,14 @@ def export_report(patient, drug, dose_rec: dict, mc_stats: dict,
         ("EF / ejeksiyon fraksiyonu (ilaçlı)", f"{cls_drug['ef_label']} ({cls_drug['ef_color']})"),
         ("CO / kardiyak output (ilaçlı)", f"{cls_drug['co_label']} ({cls_drug['co_color']})"),
     ]
+    # tau_av alanları eski çağıranlarda (Faz 5 öncesi kaydedilmiş session_state
+    # gibi) bulunmayabilir -- opsiyonel, geriye dönük uyumlu.
+    if "tau_av_drug_ms" in heart_result:
+        summary_rows.append((
+            "AV gecikmesi / PR aralığı benzeri (ilaçlı)",
+            f"{heart_result['tau_av_drug_ms']:.0f} ms "
+            f"({heart_result['tau_av_drug_ms'] - heart_result['tau_av_base_ms']:+.0f} ms baseline'a göre)",
+        ))
     for label, value in summary_rows:
         pdf.set_font("Arial", "B", 10)
         # 75mm: tablodaki en uzun etiket ("LVEDV / diyastol sonu hacim
@@ -207,19 +235,27 @@ def export_report(patient, drug, dose_rec: dict, mc_stats: dict,
     # --- Kaynakça (sadece "literatür" olarak işaretlenen parametreler) ---
     pdf.add_page()
     pdf.set_font("Arial", "B", 13)
-    pdf.cell(0, 8, "Kaynakça (Bu İlaç İçin Literatür Kaynaklı Parametreler)", new_x="LMARGIN", new_y="NEXT")
+    kaynakca_title = "Kaynakça (Bu İlaç İçin Literatür Kaynaklı Parametreler)" if len(drugs) == 1 \
+        else "Kaynakça (İlaçlar İçin Literatür Kaynaklı Parametreler)"
+    pdf.cell(0, 8, kaynakca_title, new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Arial", "", 9)
-    report_rows = provenance_report(patient, drug)
-    literature_rows = [r for r in report_rows if r["source_type"] == "literatür"]
-    if literature_rows:
-        for row in literature_rows:
-            pdf.set_font("Arial", "B", 9)
-            pdf.cell(0, 5, f"{row['parameter']} = {row['value']}", new_x="LMARGIN", new_y="NEXT")
+    for drug in drugs:
+        if len(drugs) > 1:
+            pdf.set_font("Arial", "B", 10)
+            pdf.cell(0, 6, drug.display_name, new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("Arial", "", 9)
-            pdf.multi_cell(0, 5, row["detail"])
-            pdf.ln(1)
-    else:
-        pdf.multi_cell(0, 5, "Bu ilaç için literatür kaynaklı olarak işaretlenmiş parametre bulunamadı.")
+        report_rows = provenance_report(patient, drug)
+        literature_rows = [r for r in report_rows if r["source_type"] == "literatür"]
+        if literature_rows:
+            for row in literature_rows:
+                pdf.set_font("Arial", "B", 9)
+                pdf.cell(0, 5, f"{row['parameter']} = {row['value']}", new_x="LMARGIN", new_y="NEXT")
+                pdf.set_font("Arial", "", 9)
+                pdf.multi_cell(0, 5, row["detail"])
+                pdf.ln(1)
+        else:
+            pdf.multi_cell(0, 5, "Bu ilaç için literatür kaynaklı olarak işaretlenmiş parametre bulunamadı.")
+        pdf.ln(2)
 
     pdf.ln(4)
     pdf.set_font("Arial", "B", 9)
