@@ -93,6 +93,70 @@ def predict_next_embedding(predictor: Predictor, embedding: torch.Tensor,
     return embedding + predictor(embedding, action)
 
 
+class GoalConditionedPredictor(nn.Module):
+    """
+    DENEY (2026-08-01): serbest-formlu `Predictor`'ın ("delta ekle", sınırsız)
+    yerine, sistemin FİZİKSEL yapısını kullanan bir alternatif -- kullanıcı
+    sohbette önerdi: "elimizdeki vektör, action'la beraber bir GOAL STATE'e
+    gitmeye çalışıyor". Bu, `transient_integration.py::compute_absolute_targets()`'ın
+    CircAdapt tarafında ZATEN yaptığı şeyin (her adımda "bu konsantrasyonda
+    kalp NEREYE yerleşir" mutlak hedefini hesaplayıp, kalbin oraya doğru
+    gevşemesine izin vermek -- ÖNCEKİ adımdan hafıza YOK) embedding-uzayındaki
+    karşılığı.
+
+    embedding_{t+1} = (1 - alpha) * embedding_t + alpha * goal_embedding_t
+    goal_embedding_t = embedding_baseline + goal_net(action_t)
+
+    embedding_baseline: o trajectory'nin GERÇEK, ilaç-öncesi (frame_idx=0)
+        embedding'i -- action->0 iken sistemin ZORUNLU OLARAK döneceği,
+        BİLİNEN/SABİT bir çapa (eğitimde TransientDynamicsDataset'in
+        `baseline_state` alanından, rollout'ta frame 0'ın kendi
+        embedding'inden -- HER İKİSİ DE modelin tahmini DEĞİL, gerçek veri).
+    goal_net: küçük bir MLP, SADECE aksiyondan "bu ilaç seviyesinde sistem
+        nereye yerleşir" farkını (baseline'a göre) öğrenir.
+    alpha: TÜM adımlarda/hastalarda PAYLAŞILAN, öğrenilen TEK bir skaler
+        (sigmoid ile (0,1)'e sıkıştırılmış) -- "2.5 dakikada hedefe doğru
+        ortalama ne kadar yol alınır" oranı.
+
+    NEDEN YAPISAL OLARAK DAHA KARARLI: embedding_{t+1}, embedding_t ile
+    goal_embedding_t arasındaki DOĞRU PARÇASI üzerinde bir noktadır (ikisinin
+    ağırlıklı ortalaması) -- eski `Predictor`'ın sınırsız toplamsal delta'sı
+    gibi 16 adımda katlanarak BÜYÜYEMEZ (bkz. trend-özellik denemesinin
+    patlaması, aynı gün daha önce ölçüldü).
+    """
+
+    def __init__(self, embedding_dim: int = DEFAULT_EMBEDDING_DIM, action_dim: int = ACTION_DIM,
+                 hidden_dim: int = DEFAULT_HIDDEN_DIM, fixed_alpha: float | None = None):
+        """
+        fixed_alpha: DENEY 2 DÜZELTMESİ -- İlk denemede (2026-08-01, seed0)
+        alpha ÖĞRENİLEBİLİRDİ (`nn.Parameter`) ve eğitim kaybı 200 epoch'ta
+        88bin'den 566 TRİLYONA patladı (embedding_std 1250'den 252 milyona) --
+        muhtemel sebep: alpha küçülürken goal_net'in bunu telafi etmek için
+        çıktı ölçeğini sınırsızca büyütebildiği bir ÖLÇEK DEJENERASYONU
+        (varyans cezası SADECE alt sınır koyuyor, üst sınır yok). `fixed_alpha`
+        verilirse alpha artık ÖĞRENİLMİYOR -- bu serbestlik derecesi tamamen
+        ortadan kalkıyor. `None` ise (varsayılan) eski öğrenilebilir davranış
+        korunur (karşılaştırma için).
+        """
+        super().__init__()
+        self.goal_net = _mlp(action_dim, hidden_dim, embedding_dim)
+        self.fixed_alpha = fixed_alpha
+        if fixed_alpha is None:
+            self.alpha_logit = nn.Parameter(torch.zeros(1))  # sigmoid(0)=0.5 başlangıç
+
+    def _alpha(self) -> torch.Tensor:
+        if self.fixed_alpha is not None:
+            return torch.tensor(self.fixed_alpha)
+        return torch.sigmoid(self.alpha_logit)
+
+    def forward(self, embedding: torch.Tensor, embedding_baseline: torch.Tensor,
+                action: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        goal_embedding = embedding_baseline + self.goal_net(action)
+        alpha = self._alpha()
+        next_embedding = (1 - alpha) * embedding + alpha * goal_embedding
+        return next_embedding, goal_embedding
+
+
 class DecoderHead(nn.Module):
     """embedding -> [EF, CO, HR, EDV, ESV] (normalize edilmiş, sıra
     SCALAR_TARGET_FIELDS ile birebir aynı -- bkz. train_decoder.py)."""

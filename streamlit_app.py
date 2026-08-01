@@ -61,7 +61,7 @@ from patient_profile.ui_support import (
 from patient_profile.patient_registry import load_saved_patients, save_patient_record, delete_patient_record
 from generate_dynamics_dataset import resample_trajectory
 from transient_integration import run_transient_trajectory, SUPPORTED_DRUG_CLASSES
-from worldmodel.learned_dynamics.model import Encoder, Predictor, DecoderHead, predict_next_embedding, get_device
+from worldmodel.learned_dynamics.model import Encoder, GoalConditionedPredictor, DecoderHead, get_device
 from worldmodel.learned_dynamics.state_repr import (
     build_patient_covariate_vector, build_state_vector, NormStats, SCALAR_TARGET_FIELDS,
 )
@@ -187,12 +187,17 @@ DEFAULT_BASE_PK_PARAMS = {
     "potassium_mEqL": 4.25, "calcium_mgdL": 9.5,
 }
 
-# JEPA -- 1560-trajectory veriyle yeniden eğitilmiş, test setinde en iyi
-# ölçülen kontrol noktası (bkz. logs/SUMMARY_1560.md, R²: ef=0.99 hr=0.97
-# edv=0.94 esv=0.99). models/dynamics_jepa_transient_large (eski, 260-veri
-# ile eğitilmiş kontrol noktası) BİLİNÇLİ OLARAK kullanılmıyor -- o dizin
-# bu retraining turunda hiç güncellenmedi.
-JEPA_MODEL_DIR = os.path.join(base_dir, "models", "dynamics_jepa_transient_1560run_1560data_seed0")
+# JEPA -- "hedef-durum" (goal-conditioned) mimari, kullanıcının önerisiyle
+# eklendi (bkz. worldmodel/learned_dynamics/model.py > GoalConditionedPredictor
+# docstring'i). Eski delta-tabanlı Predictor'ın yerini aldı -- EF/HR/EDV/ESV'de
+# 3 farklı seed'de TUTARLI şekilde eski modeli geçiyor (40. dakika R²:
+# ef 0.990->0.995, hr 0.977->0.991, edv 0.943->0.986, esv 0.985->0.996,
+# ortalama). CO (kardiyak debi) İSTİSNA -- seed'ler arası tutarsız (bir
+# seed'de R²=-0.475'e kadar çöküyor), o yüzden CO'nun kalitesi bu modelde
+# GÜVENİLİR DEĞİL, kullanıcıyla bilinçli olarak "şimdilik gözardı" kararı
+# alındı. models/dynamics_jepa_transient_1560run_1560data_seed0 (eski
+# delta-Predictor kontrol noktası) artık KULLANILMIYOR ama silinmedi.
+JEPA_MODEL_DIR = os.path.join(base_dir, "models", "dynamics_jepa_goal_a0.7_l2_1e-3_seed0")
 JEPA_WINDOW_MIN = 40.0
 JEPA_FRAME_INTERVAL_MIN = 2.5
 JEPA_SCALAR_LABELS = {
@@ -211,16 +216,17 @@ def load_jepa_bundle():
     device = get_device()
     encoder = Encoder(state_dim=cfg["state_dim"], hidden_dim=cfg["hidden_dim"],
                        embedding_dim=cfg["embedding_dim"]).to(device)
-    predictor = Predictor(embedding_dim=cfg["embedding_dim"], hidden_dim=cfg["hidden_dim"]).to(device)
+    goal_predictor = GoalConditionedPredictor(embedding_dim=cfg["embedding_dim"], hidden_dim=cfg["hidden_dim"],
+                                               fixed_alpha=cfg.get("fixed_alpha")).to(device)
     decoder = DecoderHead(embedding_dim=cfg["embedding_dim"], hidden_dim=cfg["hidden_dim"]).to(device)
     encoder.load_state_dict(torch.load(os.path.join(JEPA_MODEL_DIR, "encoder.pt"), map_location=device))
-    predictor.load_state_dict(torch.load(os.path.join(JEPA_MODEL_DIR, "predictor.pt"), map_location=device))
+    goal_predictor.load_state_dict(torch.load(os.path.join(JEPA_MODEL_DIR, "goal_predictor.pt"), map_location=device))
     decoder.load_state_dict(torch.load(os.path.join(JEPA_MODEL_DIR, "decoder.pt"), map_location=device))
     encoder.eval()
-    predictor.eval()
+    goal_predictor.eval()
     decoder.eval()
     norm_stats = NormStats.load(os.path.join(JEPA_MODEL_DIR, "norm_stats.json"))
-    return encoder, predictor, decoder, norm_stats, device
+    return encoder, goal_predictor, decoder, norm_stats, device
 
 
 def run_jepa_rollout(frames: list[dict], patient) -> pd.DataFrame:
@@ -230,7 +236,7 @@ def run_jepa_rollout(frames: list[dict], patient) -> pd.DataFrame:
     çalıştırır -- rollout_evaluate.py ile BİREBİR AYNI protokol (gerçek
     veri araya hiç karışmaz, model kendi tahminini besler) -- ve gerçek/
     tahmin değerlerini tek bir DataFrame'de döndürür."""
-    encoder, predictor, decoder, norm_stats, device = load_jepa_bundle()
+    encoder, goal_predictor, decoder, norm_stats, device = load_jepa_bundle()
 
     covariate_row = {
         "age": patient.age, "weight_kg": patient.weight_kg, "height_cm": patient.height_cm,
@@ -245,6 +251,7 @@ def run_jepa_rollout(frames: list[dict], patient) -> pd.DataFrame:
     rows = []
     with torch.no_grad():
         embedding = None
+        embedding_baseline = None
         for frame in frames:
             p_r = resample_trajectory(frame["t"], frame["p"])
             v_r = resample_trajectory(frame["t"], frame["v"])
@@ -257,15 +264,19 @@ def run_jepa_rollout(frames: list[dict], patient) -> pd.DataFrame:
             if embedding is None:
                 # frame_idx=0: rollout GERÇEK embedding'den başlar (rollout_evaluate.py
                 # ile aynı) -- bu ilk karede "tahmin" de gerçek değerin kendisidir.
+                # embedding_baseline: "hedef-durum" (goal-conditioned) mimarinin
+                # ilaç-öncesi referans noktası -- BU trajectory'nin frame 0'ı,
+                # rollout boyunca SABİT kalır (bkz. GoalConditionedPredictor).
                 state = build_state_vector(p_r, v_r, covariates, current_hr=frame["current_hr"])
                 state_norm = norm_stats.normalize_state(state).astype(np.float32)
                 embedding = encoder(torch.from_numpy(state_norm).unsqueeze(0).to(device))
+                embedding_baseline = embedding
                 pred_vals = dict(true_vals)
             else:
                 action_raw = np.array([[frame["conc_mg_L"]]], dtype=np.float32)
                 action_norm = norm_stats.normalize_action(action_raw).astype(np.float32)
                 action_t = torch.from_numpy(action_norm).to(device)
-                embedding = predict_next_embedding(predictor, embedding, action_t)
+                embedding, _ = goal_predictor(embedding, embedding_baseline, action_t)
                 decoded_norm = decoder(embedding).cpu().numpy()[0]
                 pred_vals = {
                     field: float(norm_stats.denormalize_scalar(field, decoded_norm[i]))
@@ -1071,10 +1082,18 @@ with tab_sim:
                 st.warning(
                     "**Karma yönlü kombinasyon:** seçili ilaçlardan bazıları nabzı/"
                     "tansiyonu DÜŞÜRÜRKEN bazıları ARTIRIYOR. Bu durumda kullanılan "
-                    "gruplama+fark yöntemi (bkz. pd.py > grouped_loewe_combined_effect) "
-                    "**literatürden gelen standart bir yöntem DEĞİL** -- projenin kendi "
-                    "mühendislik kararıdır (RESEARCH_N_DRUG.md ADR-4). Sonuçları "
-                    "yorumlarken bunu göz önünde bulundurun."
+                    "mekanistik fraksiyon-çarpımı yöntemi (bkz. pd.py > "
+                    "mechanistic_fraction_combined_effect, RESEARCH_N_DRUG.md ADR-7), "
+                    "CircAdapt sekmesindeki kalp simülasyonunun kendi kanonik "
+                    "formülünün (her ilacın izole nabız fraksiyonunun kalp siklus "
+                    "süresi üzerinde çarpımsal birikmesi) birebir mirror'ı -- HR için "
+                    "iki motor artık aynı matematiği paylaşıyor. SBP tarafında ise "
+                    "CircAdapt'in kendisinde doğrudan bir karşılığı yok (SBP orada "
+                    "PV-loop simülasyonundan emergent olarak çıkıyor), bu yüzden HR "
+                    "ile tutarlılık amacıyla AYNI yaklaşım uygulanıyor ama bu kısım "
+                    "**standart bir literatür yöntemi DEĞİL**, projenin kendi "
+                    "mühendislik genellemesidir. Sonuçları yorumlarken bunu göz "
+                    "önünde bulundurun."
                 )
 
         st.subheader("Klinik Özet")
@@ -1576,13 +1595,15 @@ with tab_jepa:
         "hesapladığı değerle yan yana gösteriliyor."
     )
     st.warning(
-        "**Bu model henüz üretim/karar-destek amaçlı DEĞİL.** Test setinde "
-        "R² yüksek (EF/HR/EDV/ESV'de 0.93-0.99) ama mutlak hatada (MAE) "
-        "çoğu metrikte 'hiçbir şey değişmedi' varsayımını (persistence "
-        "baseline) henüz geçemiyor -- yani hastalar-arası GÖRELİ farkı iyi "
-        "yakalıyor, ama CircAdapt'in yerini alacak kadar isabetli değil. "
-        "Sadece araştırma/gösterim amaçlıdır. Detaylı deney sonuçları için "
-        "proje_detayli_anlatim.html Bölüm 8 ve logs/SUMMARY_1560.md."
+        "**Bu model henüz üretim/karar-destek amaçlı DEĞİL.** \"Hedef-durum\" "
+        "(goal-conditioned) mimarisiyle eğitildi -- EF/Nabız/LVEDV/LVESV'de "
+        "test setinde 3 farklı eğitim tekrarında (seed) TUTARLI şekilde "
+        "yüksek isabet gösteriyor (40. dakika R² ~0.98-0.99). **Kardiyak "
+        "debi (CO) hariç** -- CO tahmini eğitim tekrarları arasında TUTARSIZ "
+        "(bazı tekrarlarda 'hiçbir şey değişmedi' varsayımından bile kötü), "
+        "bu yüzden CO grafiğine güvenilmemeli; bilinçli olarak henüz "
+        "düzeltilmedi. Sadece araştırma/gösterim amaçlıdır. Detaylı deney "
+        "sonuçları için proje_detayli_anlatim.html Bölüm 8 ve logs/SUMMARY_1560.md."
     )
 
     # ADIM 6: eskiden SADECE drugs[0]'ın sınıfına bakılıyordu -- N ilaç
