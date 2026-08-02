@@ -278,6 +278,50 @@ kullanıcıya AÇIKÇA gösterilecek bir "aşırı doygunluk" uyarısı olarak e
 alınacak; şu an config'te sadece 1 kayıt olduğu için bu N=1/2 golden
 davranışını ETKİLEMİYOR.
 
+### ADR-7 (2026-08-01 revizyon): ADR-4'ün "gruplama+fark"ı → CircAdapt-mirror'lı mekanistik fraksiyon çarpımı
+
+**Gerekçe:** ADR-4'te kabul edilen "gruplama+fark" (ilaçları Emax işaretine
+göre iki gruba ayırıp her grubu Loewe ile birleştirdikten sonra BASİT
+FARKINI almak), o an bilinen tüm klasik yöntemlerin (Loewe, Bliss, HSA,
+MuSyC, ZIP) bu senaryoyu kapsamadığı doğru tespitiyle alınmış bir karardı.
+Ancak proje, kendi CircAdapt entegrasyonunda (mekanik kalp simülasyonu)
+ZATEN daha iyi bir çözüme sahipti: `integrate_drug_with_circadapt.py >
+apply_drug_effect_to_circadapt()`/`run_with_multiple_drugs()`, nabzı bpm
+deltası toplayarak DEĞİL, her ilacın kendi İZOLE `hr_fraction`'ının
+(yeni_hr/bazal_hr) `General.t_cycle` üzerinde ÇARPIMSAL olarak
+birikmesiyle birleştiriyor — bu formül fraksiyonun yönünden (1'in üstünde/
+altında olmasından) tamamen bağımsız, yani zıt yönlü ilaçlar için hiçbir
+özel gruplama/işaret ayrımına ihtiyaç duymuyor. Bu formülün order-
+independent olduğu ölçülerek doğrulanmıştı (N_DRUG_AUDIT.md, 24/24
+permütasyon bit-identical) — yani zaten proje-içi kanonik/güvenilir kabul
+edilen bir mekanizma.
+
+**Karar:** `pd.grouped_loewe_combined_effect()`'in karma-yönlü dalı, ADR-4'ün
+"gruplama+fark" formülü YERİNE, yeni `pd.mechanistic_fraction_combined_effect()`
+fonksiyonunu kullanacak şekilde değiştirildi — bu fonksiyon CircAdapt'in
+t_cycle formülünün istatistiksel katmandaki BİREBİR mirror'ı. Aynı-yönlü
+dal (`loewe_combined_effect()`) DOKUNULMADI (MUTLAK KURAL #1, N=1/N=2
+davranışı sessizce değişmiyor).
+
+**HR/SBP ayrımı — dürüstlük notu:** CircAdapt'te HR için gerçek bir
+kanonik formül var (t_cycle), ama SBP CircAdapt'te Sf_act/ArtVen.p0'dan
+PV-loop simülasyonuyla EMERGENT olarak çıkıyor — kapalı formda bir "SBP
+fraksiyonu" formülü YOK, yani SBP tarafında mirror'lanacak bir referans
+yok. `mechanistic_fraction_combined_effect()` SBP'ye de aynı çarpımsal-
+fraksiyon yaklaşımını uyguluyor, ama bu HR ile TUTARLILIK ve
+öngörülebilirlik (keyfi işaret-gruplaması olmaması) gerekçesiyle alınmış
+AYRI bir mühendislik kararı — CircAdapt mirror'ı olduğu iddia edilmiyor,
+kod docstring'inde ve streamlit uyarısında bu ayrım açıkça belirtiliyor.
+
+**Doğrulama:** `tests/test_n_drug_statistical.py >
+test_mechanistic_fraction_combined_effect_matches_circadapt_t_cycle`, aynı
+senaryoda istatistiksel motorun HR sonucunun CircAdapt'in `t_cycle`
+çarpanından türetilen HR ile SAYISAL OLARAK eşleştiğini doğruluyor.
+Regresyon: hiçbir golden snapshot bu karma-yönlü sonucu SABİT bir sayısal
+değere pinlemiyordu (`tests/test_no_regression_n_drug.py`'deki tek test
+sadece gevşek `30 < mean < 130` bpm sınırı kontrol ediyor) — bu yüzden N=1/
+N=2 aynı-yönlü davranışı hiç etkilenmeden değişiklik yapılabildi.
+
 ---
 
 ## 4. Seçilen Yöntemin Mevcut Koda İlişkisi

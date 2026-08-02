@@ -199,6 +199,15 @@ def test_n2_opposite_direction_loewe_now_returns_grouped_result_not_error(world,
     eski davranışla KARŞILAŞTIRILABİLİR bir değişiklik (MUTLAK KURAL #1'in
     istisnası -- kural N=1/N=2'nin SESSİZCE değişmemesini istiyor, bu
     burada açıkça belgeleniyor ve test ediliyor).
+
+    ADR-7 GÜNCELLEMESİ: "tanımlı sonuç" artık ADR-4'ün "gruplama+fark"
+    formülüyle DEĞİL, mechanistic_fraction_combined_effect() (CircAdapt'in
+    kanonik t_cycle formülünün mirror'ı) ile üretiliyor -- bu testte
+    pinlenmiş bir sayısal golden değer OLMADIĞI için (sadece gevşek
+    30-130 bpm sınırı), yöntem değişikliği bu testi BOZMUYOR; sayısal
+    tutarlılık iddiası ayrıca test_n_drug_statistical.py >
+    test_mechanistic_fraction_combined_effect_matches_circadapt_t_cycle'da
+    doğrulanıyor.
     """
     combo = [world["beta"], world["nicardipine"]]
     result = run_polypharmacy_simulation_loewe(world["hasta_a"], combo, **mc_kwargs())

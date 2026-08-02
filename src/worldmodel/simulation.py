@@ -498,16 +498,20 @@ def run_polypharmacy_simulation_loewe(patient: Patient, drugs: list[Drug],
     çarpıp-kırpma bu varsayımı bozardı (0-1.3 aralığına kırpma, izobol
     denkleminin monotonluk garantisini geçersiz kılar).
 
-    ZIT YÖNLÜ İLAÇLAR (Şüphe D / ADR-4): eskiden (bu docstring güncellenmeden
-    önce) tüm ilaçların emax_hr'sinin (ve ayrı ayrı emax_sbp'sinin) AYNI
-    yönde olması ZORUNLUYDU, aksi halde loewe_combined_effect() ValueError
-    fırlatırdı. Artık pd.py > grouped_loewe_combined_effect() kullanılıyor --
-    ilaçlar Emax işaretine göre gruplanıp her grup kendi içinde Loewe ile
-    birleştiriliyor, net etki gruplar arası (işaretli) toplam. Bu bir
-    LİTERATÜR YÖNTEMİ DEĞİL, projenin kendi mühendislik kararı (bkz. o
-    fonksiyonun docstring'i) -- ValueError artık SADECE hiç ilaç
-    verilmediğinde ya da alt fonksiyonlardan gelen başka bir hata
-    durumunda oluşur.
+    ZIT YÖNLÜ İLAÇLAR (Şüphe D / ADR-4 -> ADR-7): eskiden tüm ilaçların
+    emax_hr'sinin (ve ayrı ayrı emax_sbp'sinin) AYNI yönde olması
+    ZORUNLUYDU, aksi halde loewe_combined_effect() ValueError fırlatırdı.
+    Artık pd.py > grouped_loewe_combined_effect() kullanılıyor -- bu fonksiyon
+    KISMİ gruplama YAPMAZ, ikili (all-or-nothing) bir anahtardır: TÜM
+    ilaçların Emax işareti aynıysa hepsi birlikte loewe_combined_effect()
+    ile birleştirilir; aksi halde (tek bir ilaç bile zıt yönlüyse) TÜM
+    ilaçlar (aynı yönlü olanlar dahil) mechanistic_fraction_combined_effect()
+    ile birleştirilir -- "aynı yönlü alt-grup Loewe ile, net etki gruplar
+    arası toplam" şeklinde bir ara adım YOKTUR (bkz. pd.py >
+    grouped_loewe_combined_effect() docstring'i, ADR-7). Bu bir LİTERATÜR
+    YÖNTEMİ DEĞİL, projenin kendi mühendislik kararı -- ValueError artık
+    SADECE hiç ilaç verilmediğinde ya da alt fonksiyonlardan gelen başka
+    bir hata durumunda oluşur.
     """
     rng = np.random.default_rng(seed)
     t = np.linspace(0, hours, n_timepoints)
@@ -551,12 +555,13 @@ def run_polypharmacy_simulation_loewe(patient: Patient, drugs: list[Drug],
             if d_idx == 0:
                 conc_runs[i] = conc
 
-        # bkz. pd.py > grouped_loewe_combined_effect (Şüphe D / ADR-4) --
+        # bkz. pd.py > grouped_loewe_combined_effect (Şüphe D / ADR-4/ADR-7) --
         # aynı-yönlü ilaçlarda loewe_combined_effect() ile SAYISAL OLARAK
-        # BİREBİR AYNI (tek grup), zıt yönlü kombinasyonlarda artık
-        # ValueError yerine gruplama+fark ile tanımlı bir sonuç üretir.
-        hr_delta = grouped_loewe_combined_effect(ce_hr_list, ec50_list, emax_hr_list)
-        sbp_delta = grouped_loewe_combined_effect(ce_sbp_list, ec50_list, emax_sbp_list)
+        # BİREBİR AYNI (tek grup), zıt yönlü kombinasyonlarda artık ValueError
+        # yerine CircAdapt'in kanonik formülünü mirror'layan mekanistik
+        # fraksiyon çarpımıyla (ADR-7) tanımlı bir sonuç üretir.
+        hr_delta = grouped_loewe_combined_effect(ce_hr_list, ec50_list, emax_hr_list, patient.baseline_hr)
+        sbp_delta = grouped_loewe_combined_effect(ce_sbp_list, ec50_list, emax_sbp_list, patient.baseline_sbp)
 
         hr = patient.baseline_hr - hr_delta
         sbp = patient.baseline_sbp - sbp_delta

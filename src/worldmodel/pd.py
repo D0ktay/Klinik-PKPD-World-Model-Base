@@ -159,47 +159,79 @@ def loewe_combined_effect(concentrations: list[np.ndarray], ec50s: list[float],
     return sign * (lo + hi) / 2
 
 
+def mechanistic_fraction_combined_effect(concentrations: list[np.ndarray], ec50s: list[float],
+                                          emaxes: list[float], baseline: float) -> np.ndarray:
+    """
+    Zıt yönlü (bir ilaç azaltır, biri artırır) ilaç kombinasyonlarını,
+    integrate_drug_with_circadapt.py > cumulative_parameter_multipliers()'ın
+    `General.t_cycle` için kullandığı ile BİREBİR AYNI mekanizmayla
+    birleştirir (RESEARCH_N_DRUG.md ADR-7 -- ADR-4'ün "gruplama+fark"
+    kararının YERİNE geçti).
+
+    NEDEN BU DAHA İYİ: CircAdapt tarafında nabız, "bpm deltası toplama"
+    değil, her ilacın kendi İZOLE `hr_fraction`'ının (yeni_hr/bazal_hr)
+    kalp siklus süresi (t_cycle) üzerinde ÇARPIMSAL olarak birikmesiyle
+    hesaplanıyor: `t_cycle_multiplier /= hr_fraction` (her ilaç için sırayla).
+    HR = 60/t_cycle olduğundan bu, birleşik HR'nin `baseline * Π(hr_fraction_i)`
+    olduğu anlamına gelir -- bu formül yönden (fraksiyon 1'in üstünde mi
+    altında mı) bağımsız, yani zıt yönlü ilaçlar için HİÇBİR özel gruplama/
+    işaret ayrımına ihtiyaç duymuyor, Loewe'nin aksine "aynı yönde olma"
+    zorunluluğu da yok. Bu formülün order-independent olduğu N_DRUG_AUDIT.md'de
+    ölçülerek doğrulandı (24/24 permütasyon bit-identical).
+
+    HR için bu, CircAdapt'in kendi kanonik formülünün BİREBİR mirror'ı --
+    iki motor artık gerçekten aynı matematiği paylaşıyor (AV-blok
+    düzeltmesindeki (ADR-3) desenle aynı). SBP için CircAdapt'te doğrudan
+    bir karşılığı YOK (SBP orada Sf_act/ArtVen.p0'dan PV-loop simülasyonuyla
+    EMERGENT olarak çıkıyor, kapalı bir "SBP fraksiyonu" formülü yok) --
+    burada aynı çarpımsal-fraksiyon yaklaşımı HR ile TUTARLILIK ve
+    öngörülebilirlik (keyfi bir işaret-gruplaması olmaması) gerekçesiyle
+    uygulanıyor; bu kısım ⚠️ CircAdapt mirror'ı DEĞİL, tutarlılık amaçlı bir
+    mühendislik genellemesidir.
+
+    concentrations/ec50s/emaxes: loewe_combined_effect() ile AYNI anlamda --
+    her ilacın etki-bölgesi konsantrasyonu, EC50'si, Emax'ı (işaretli).
+    baseline: hastanın bazal HR/SBP'si (delta'yı fraksiyona/geri çevirmek
+    için gerekli -- loewe_combined_effect()'in aksine bu formül baseline'a
+    göre TANIMLI, çünkü CircAdapt'teki referans mekanizma da öyle).
+
+    Dönüş: loewe_combined_effect() ile AYNI birimde (fizyolojik, örn. bpm),
+    işaretli net delta -- yani `baseline - dönüş_değeri` = birleşik HR/SBP.
+    """
+    cumulative_fraction = np.ones_like(concentrations[0])
+    for conc, ec50, emax in zip(concentrations, ec50s, emaxes):
+        isolated_value = baseline - emax_effect(conc, ec50, sensitivity=1.0) * emax
+        hr_fraction = np.maximum(isolated_value / baseline, 1e-6)
+        cumulative_fraction = cumulative_fraction * hr_fraction
+    return baseline - baseline * cumulative_fraction
+
+
 def grouped_loewe_combined_effect(concentrations: list[np.ndarray], ec50s: list[float],
-                                   emaxes: list[float], n_iterations: int = 40) -> np.ndarray:
+                                   emaxes: list[float], baseline: float,
+                                   n_iterations: int = 40) -> np.ndarray:
     """
     loewe_combined_effect()'in ZIT YÖNLÜ ilaç kombinasyonlarını da kabul
-    eden versiyonu (N_DRUG_AUDIT.md Şüphe D, RESEARCH_N_DRUG.md ADR-4).
-
-    ⚠️ MÜHENDİSLİK KARARI -- LİTERATÜR KAYNAĞI YOK: ne Loewe additivity ne
-    de araştırılan diğer yöntemler (Bliss, HSA, MuSyC, ZIP -- bkz.
-    RESEARCH_N_DRUG.md §1) zıt yönlü etkileri (bir ilaç azaltır, biri
-    artırır) formel olarak ele alıyor -- hiçbiri bunu N ilaca genellenmiş,
-    yayınlanmış bir yöntemle çözmüyor. Bu fonksiyon PROJENİN KENDİ,
-    literatürden gelmeyen pragmatik kararı: ilaçlar Emax işaretine göre iki
-    gruba ayrılır (azaltanlar / artıranlar), HER GRUP KENDİ İÇİNDE
-    loewe_combined_effect() ile birleştirilir (aynı yönde etki eden ilaçlar
-    için Loewe hâlâ geçerli), İKİ GRUBUN NET SONUCU ise BASİT TOPLAM ile
-    hesaplanır -- loewe_combined_effect() zaten İŞARETLİ bir delta
-    döndürdüğü için (azaltan grup pozitif, artıran grup negatif), toplamları
-    almak otomatik olarak "net = fark" anlamına gelir.
+    eden versiyonu (N_DRUG_AUDIT.md Şüphe D, RESEARCH_N_DRUG.md ADR-4/ADR-7).
 
     TEK GRUP (tüm ilaçlar aynı yönde) durumunda bu fonksiyon
     loewe_combined_effect()'in SAYISAL OLARAK BİREBİR AYNISINI döndürür --
     yani mevcut aynı-yönlü N=1/N=2 senaryolarında (tests/test_no_regression_n_drug.py)
-    davranış DEĞİŞMEZ. Sadece zıt yönlü bir kombinasyon verildiğinde
-    (öncesinde loewe_combined_effect()'in ValueError fırlattığı durum)
-    farklı, artık TANIMLI bir sonuç üretir.
+    davranış DEĞİŞMEZ. Zıt yönlü bir kombinasyon verildiğinde ise artık
+    ADR-4'ün "gruplama+fark" kararı DEĞİL, mechanistic_fraction_combined_effect()
+    (ADR-7 -- CircAdapt'in kendi kanonik t_cycle formülünün mirror'ı)
+    kullanılıyor -- bkz. o fonksiyonun docstring'i.
+
+    baseline: hastanın bazal HR/SBP'si -- SADECE zıt yönlü dalda
+    (mechanistic_fraction_combined_effect) kullanılır, aynı yönlü dalda
+    (loewe_combined_effect) hiç dokunulmaz.
 
     Dönüş: loewe_combined_effect() ile aynı birimde (fizyolojik, örn. bpm),
     işaretli net delta.
     """
-    positive_idx = [i for i, e in enumerate(emaxes) if e >= 0]
-    negative_idx = [i for i, e in enumerate(emaxes) if e < 0]
-
-    net = np.zeros_like(concentrations[0])
-    for group_idx in (positive_idx, negative_idx):
-        if not group_idx:
-            continue
-        group_conc = [concentrations[i] for i in group_idx]
-        group_ec50 = [ec50s[i] for i in group_idx]
-        group_emax = [emaxes[i] for i in group_idx]
-        net = net + loewe_combined_effect(group_conc, group_ec50, group_emax, n_iterations=n_iterations)
-    return net
+    all_same_sign = all((e >= 0) == (emaxes[0] >= 0) for e in emaxes)
+    if all_same_sign:
+        return loewe_combined_effect(concentrations, ec50s, emaxes, n_iterations=n_iterations)
+    return mechanistic_fraction_combined_effect(concentrations, ec50s, emaxes, baseline)
 
 
 # İlaç sınıfları -- CircAdapt entegrasyonundaki (integrate_drug_with_circadapt.py

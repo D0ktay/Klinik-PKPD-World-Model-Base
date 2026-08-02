@@ -20,10 +20,11 @@ import pytest
 from hypothesis import given, settings, strategies as st
 
 from worldmodel.patient import load_drugs, load_patients, Drug
-from worldmodel.pd import loewe_combined_effect, grouped_loewe_combined_effect
+from worldmodel.pd import loewe_combined_effect, grouped_loewe_combined_effect, mechanistic_fraction_combined_effect
 from worldmodel.simulation import (
     run_monte_carlo, run_polypharmacy_simulation, run_polypharmacy_simulation_loewe,
 )
+import integrate_drug_with_circadapt as idc
 
 CONFIG_DIR = os.path.join(os.path.dirname(__file__), "..", "configs")
 
@@ -300,11 +301,15 @@ def test_loewe_combined_effect_stays_bounded_and_finite(n, emax_base, ec50_base,
 )
 @settings(max_examples=25, deadline=None)
 def test_grouped_loewe_handles_arbitrary_sign_mix(n_positive, n_negative):
-    """grouped_loewe_combined_effect (ADR-4), rastgele sayıda pozitif/negatif
-    Emax'lı ilaç karışımında HİÇBİR ZAMAN çökmemeli (ValueError/exception),
-    her zaman sonlu bir sonuç döndürmeli."""
+    """grouped_loewe_combined_effect (ADR-4/ADR-7), rastgele sayıda pozitif/
+    negatif Emax'lı ilaç karışımında HİÇBİR ZAMAN çökmemeli (ValueError/
+    exception), her zaman sonlu bir sonuç döndürmeli. Karma yönlü girdide
+    ARTIK mechanistic_fraction_combined_effect() (ADR-7) kullanıldığını da
+    doğrular -- eski "gruplama+fark" (ADR-4) yöntemine sessizce dönülmediğini
+    kanıtlamak için sonuçlar BİREBİR eşleştiriliyor."""
     if n_positive + n_negative == 0:
         return
+    baseline = 80.0
     concentrations, ec50s, emaxes = [], [], []
     for i in range(n_positive):
         concentrations.append(np.array([0.5]))
@@ -315,5 +320,37 @@ def test_grouped_loewe_handles_arbitrary_sign_mix(n_positive, n_negative):
         ec50s.append(0.3 + 0.05 * i)
         emaxes.append(-(10.0 + i))
 
-    result = grouped_loewe_combined_effect(concentrations, ec50s, emaxes)
+    result = grouped_loewe_combined_effect(concentrations, ec50s, emaxes, baseline)
     assert np.isfinite(result).all()
+
+    if n_positive > 0 and n_negative > 0:
+        expected = mechanistic_fraction_combined_effect(concentrations, ec50s, emaxes, baseline)
+        assert np.allclose(result, expected)
+
+
+def test_mechanistic_fraction_combined_effect_matches_circadapt_t_cycle(hasta_a, template_drug):
+    """ADR-7'nin asıl iddiası: istatistiksel motorun karma-yönlü HR
+    birleştirmesi, CircAdapt tarafının kanonik `t_cycle` formülüyle
+    (integrate_drug_with_circadapt.cumulative_parameter_multipliers)
+    SAYISAL OLARAK tutarlı -- iki motor artık gerçekten aynı matematiği
+    paylaşıyor (AV-blok düzeltmesindeki (ADR-3) doğrulama deseniyle aynı)."""
+    drugs = [
+        replace(template_drug, display_name="Azaltan", drug_class="vasodilator",
+                dose_mg=10.0, dose_mg_per_kg=None, ec50=0.5, emax_hr=15.0,
+                keo_hr=None, keo_sbp=None, renal_clearance_fraction=0.0, hepatic_clearance_fraction=0.0),
+        replace(template_drug, display_name="Artiran", drug_class="vasodilator",
+                dose_mg=12.0, dose_mg_per_kg=None, ec50=0.6, emax_hr=-8.0,
+                keo_hr=None, keo_sbp=None, renal_clearance_fraction=0.0, hepatic_clearance_fraction=0.0),
+    ]
+
+    drug_effects = [idc.compute_drug_effect(hasta_a, d) for d in drugs]
+    multipliers = idc.cumulative_parameter_multipliers(hasta_a, drugs, drug_effects)
+    circadapt_hr = hasta_a.baseline_hr / multipliers["t_cycle"]
+
+    concentrations = [np.array([e["conc_peak"]]) for e in drug_effects]
+    ec50s = [d.ec50 for d in drugs]
+    emaxes = [d.emax_hr for d in drugs]
+    hr_delta = mechanistic_fraction_combined_effect(concentrations, ec50s, emaxes, hasta_a.baseline_hr)
+    statistical_hr = hasta_a.baseline_hr - hr_delta
+
+    assert np.allclose(statistical_hr, circadapt_hr, rtol=1e-9)
