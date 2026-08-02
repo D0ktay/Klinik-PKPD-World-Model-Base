@@ -61,7 +61,9 @@ from patient_profile.ui_support import (
 from patient_profile.patient_registry import load_saved_patients, save_patient_record, delete_patient_record
 from generate_dynamics_dataset import resample_trajectory
 from transient_integration import run_transient_trajectory, SUPPORTED_DRUG_CLASSES
-from worldmodel.learned_dynamics.model import Encoder, GoalConditionedPredictor, DecoderHead, get_device
+from worldmodel.learned_dynamics.model import (
+    Encoder, Predictor, GoalConditionedPredictor, DecoderHead, predict_next_embedding, get_device,
+)
 from worldmodel.learned_dynamics.state_repr import (
     build_patient_covariate_vector, build_state_vector, NormStats, SCALAR_TARGET_FIELDS,
 )
@@ -187,17 +189,18 @@ DEFAULT_BASE_PK_PARAMS = {
     "potassium_mEqL": 4.25, "calcium_mgdL": 9.5,
 }
 
-# JEPA -- "hedef-durum" (goal-conditioned) mimari, kullanıcının önerisiyle
-# eklendi (bkz. worldmodel/learned_dynamics/model.py > GoalConditionedPredictor
-# docstring'i). Eski delta-tabanlı Predictor'ın yerini aldı -- EF/HR/EDV/ESV'de
-# 3 farklı seed'de TUTARLI şekilde eski modeli geçiyor (40. dakika R²:
-# ef 0.990->0.995, hr 0.977->0.991, edv 0.943->0.986, esv 0.985->0.996,
-# ortalama). CO (kardiyak debi) İSTİSNA -- seed'ler arası tutarsız (bir
-# seed'de R²=-0.475'e kadar çöküyor), o yüzden CO'nun kalitesi bu modelde
-# GÜVENİLİR DEĞİL, kullanıcıyla bilinçli olarak "şimdilik gözardı" kararı
-# alındı. models/dynamics_jepa_transient_1560run_1560data_seed0 (eski
-# delta-Predictor kontrol noktası) artık KULLANILMIYOR ama silinmedi.
-JEPA_MODEL_DIR = os.path.join(base_dir, "models", "dynamics_jepa_goal_a0.7_l2_1e-3_seed0")
+# JEPA -- HİBRİT model seçimi. "Hedef-durum" (goal-conditioned) mimari
+# (bkz. worldmodel/learned_dynamics/model.py > GoalConditionedPredictor
+# docstring'i) 3 seed'de HR/LVEDV/LVESV'de tutarlı şekilde eski (delta-
+# Predictor) modeli geçiyor -- ama EF'de erken-zirve ANLARINDA (ör.
+# Esmolol'ün ilk ~5 dakikası) gerçek eğrinin TERSİ yönde hareket ediyor
+# (α=0.7 sabit karışımın yarattığı gecikme/aşırı-tepki etkisi) ve CO
+# seed'ler arası tutarsız -- bu yüzden EF ve CO için ESKİ (delta-tabanlı)
+# model KULLANILMAYA DEVAM EDİYOR, sadece HR/LVEDV/LVESV YENİ modelden
+# alınıyor. Alan-bazlı bu ayrım JEPA_FIELD_SOURCE ile kontrol edilir.
+JEPA_MODEL_DIR_GOAL = os.path.join(base_dir, "models", "dynamics_jepa_goal_a0.7_l2_1e-3_seed0")
+JEPA_MODEL_DIR_DELTA = os.path.join(base_dir, "models", "dynamics_jepa_transient_1560run_1560data_seed0")
+JEPA_FIELD_SOURCE = {"ef": "delta", "co": "delta", "hr": "goal", "edv": "goal", "esv": "goal"}
 JEPA_WINDOW_MIN = 40.0
 JEPA_FRAME_INTERVAL_MIN = 2.5
 JEPA_SCALAR_LABELS = {
@@ -208,25 +211,47 @@ JEPA_SCALAR_LABELS = {
 
 @st.cache_resource
 def load_jepa_bundle():
-    """JEPA checkpoint'lerini (encoder/predictor/decoder + norm_stats) bir
-    kez yükleyip Streamlit process'inin ömrü boyunca bellekte tutar --
-    her buton tıklamasında diskten yeniden okumaz."""
-    with open(os.path.join(JEPA_MODEL_DIR, "model_config.json"), "r", encoding="utf-8") as f:
-        cfg = json.load(f)
+    """Her ikisi de -- eski (delta-Predictor) VE yeni (goal-conditioned) --
+    JEPA checkpoint setini bir kez yükleyip Streamlit process'inin ömrü
+    boyunca bellekte tutar -- her buton tıklamasında diskten yeniden
+    okumaz. Hangi alanın hangi modelden geleceği JEPA_FIELD_SOURCE'ta."""
     device = get_device()
-    encoder = Encoder(state_dim=cfg["state_dim"], hidden_dim=cfg["hidden_dim"],
-                       embedding_dim=cfg["embedding_dim"]).to(device)
-    goal_predictor = GoalConditionedPredictor(embedding_dim=cfg["embedding_dim"], hidden_dim=cfg["hidden_dim"],
-                                               fixed_alpha=cfg.get("fixed_alpha")).to(device)
-    decoder = DecoderHead(embedding_dim=cfg["embedding_dim"], hidden_dim=cfg["hidden_dim"]).to(device)
-    encoder.load_state_dict(torch.load(os.path.join(JEPA_MODEL_DIR, "encoder.pt"), map_location=device))
-    goal_predictor.load_state_dict(torch.load(os.path.join(JEPA_MODEL_DIR, "goal_predictor.pt"), map_location=device))
-    decoder.load_state_dict(torch.load(os.path.join(JEPA_MODEL_DIR, "decoder.pt"), map_location=device))
-    encoder.eval()
-    goal_predictor.eval()
-    decoder.eval()
-    norm_stats = NormStats.load(os.path.join(JEPA_MODEL_DIR, "norm_stats.json"))
-    return encoder, goal_predictor, decoder, norm_stats, device
+
+    with open(os.path.join(JEPA_MODEL_DIR_GOAL, "model_config.json"), "r", encoding="utf-8") as f:
+        cfg_goal = json.load(f)
+    encoder_goal = Encoder(state_dim=cfg_goal["state_dim"], hidden_dim=cfg_goal["hidden_dim"],
+                            embedding_dim=cfg_goal["embedding_dim"]).to(device)
+    goal_predictor = GoalConditionedPredictor(embedding_dim=cfg_goal["embedding_dim"],
+                                               hidden_dim=cfg_goal["hidden_dim"],
+                                               fixed_alpha=cfg_goal.get("fixed_alpha")).to(device)
+    decoder_goal = DecoderHead(embedding_dim=cfg_goal["embedding_dim"], hidden_dim=cfg_goal["hidden_dim"]).to(device)
+    encoder_goal.load_state_dict(torch.load(os.path.join(JEPA_MODEL_DIR_GOAL, "encoder.pt"), map_location=device))
+    goal_predictor.load_state_dict(
+        torch.load(os.path.join(JEPA_MODEL_DIR_GOAL, "goal_predictor.pt"), map_location=device))
+    decoder_goal.load_state_dict(torch.load(os.path.join(JEPA_MODEL_DIR_GOAL, "decoder.pt"), map_location=device))
+    encoder_goal.eval(); goal_predictor.eval(); decoder_goal.eval()
+    norm_stats_goal = NormStats.load(os.path.join(JEPA_MODEL_DIR_GOAL, "norm_stats.json"))
+
+    with open(os.path.join(JEPA_MODEL_DIR_DELTA, "model_config.json"), "r", encoding="utf-8") as f:
+        cfg_delta = json.load(f)
+    encoder_delta = Encoder(state_dim=cfg_delta["state_dim"], hidden_dim=cfg_delta["hidden_dim"],
+                             embedding_dim=cfg_delta["embedding_dim"]).to(device)
+    predictor_delta = Predictor(embedding_dim=cfg_delta["embedding_dim"],
+                                 hidden_dim=cfg_delta["hidden_dim"]).to(device)
+    decoder_delta = DecoderHead(embedding_dim=cfg_delta["embedding_dim"],
+                                 hidden_dim=cfg_delta["hidden_dim"]).to(device)
+    encoder_delta.load_state_dict(torch.load(os.path.join(JEPA_MODEL_DIR_DELTA, "encoder.pt"), map_location=device))
+    predictor_delta.load_state_dict(
+        torch.load(os.path.join(JEPA_MODEL_DIR_DELTA, "predictor.pt"), map_location=device))
+    decoder_delta.load_state_dict(torch.load(os.path.join(JEPA_MODEL_DIR_DELTA, "decoder.pt"), map_location=device))
+    encoder_delta.eval(); predictor_delta.eval(); decoder_delta.eval()
+    norm_stats_delta = NormStats.load(os.path.join(JEPA_MODEL_DIR_DELTA, "norm_stats.json"))
+
+    return {
+        "goal": (encoder_goal, goal_predictor, decoder_goal, norm_stats_goal),
+        "delta": (encoder_delta, predictor_delta, decoder_delta, norm_stats_delta),
+        "device": device,
+    }
 
 
 def run_jepa_rollout(frames: list[dict], patient) -> pd.DataFrame:
@@ -235,8 +260,15 @@ def run_jepa_rollout(frames: list[dict], patient) -> pd.DataFrame:
     frame 0'ın GERÇEK embedding'inden başlayarak otoregresif rollout
     çalıştırır -- rollout_evaluate.py ile BİREBİR AYNI protokol (gerçek
     veri araya hiç karışmaz, model kendi tahminini besler) -- ve gerçek/
-    tahmin değerlerini tek bir DataFrame'de döndürür."""
-    encoder, goal_predictor, decoder, norm_stats, device = load_jepa_bundle()
+    tahmin değerlerini tek bir DataFrame'de döndürür.
+
+    HİBRİT: goal-conditioned VE delta modelleri PARALEL çalıştırılır (her
+    biri kendi encoder/norm_stats'ıyla, birbirine karışmadan), sonuçta her
+    alan JEPA_FIELD_SOURCE'a göre ikisinden birinden seçilir."""
+    bundle = load_jepa_bundle()
+    encoder_goal, goal_predictor, decoder_goal, norm_stats_goal = bundle["goal"]
+    encoder_delta, predictor_delta, decoder_delta, norm_stats_delta = bundle["delta"]
+    device = bundle["device"]
 
     covariate_row = {
         "age": patient.age, "weight_kg": patient.weight_kg, "height_cm": patient.height_cm,
@@ -250,8 +282,9 @@ def run_jepa_rollout(frames: list[dict], patient) -> pd.DataFrame:
 
     rows = []
     with torch.no_grad():
-        embedding = None
-        embedding_baseline = None
+        embedding_goal = None
+        embedding_baseline_goal = None
+        embedding_delta = None
         for frame in frames:
             p_r = resample_trajectory(frame["t"], frame["p"])
             v_r = resample_trajectory(frame["t"], frame["v"])
@@ -261,26 +294,46 @@ def run_jepa_rollout(frames: list[dict], patient) -> pd.DataFrame:
             true_vals = {"ef": ef_true, "co": co_true, "hr": frame["current_hr"],
                          "edv": edv_true, "esv": esv_true}
 
-            if embedding is None:
+            if embedding_goal is None:
                 # frame_idx=0: rollout GERÇEK embedding'den başlar (rollout_evaluate.py
                 # ile aynı) -- bu ilk karede "tahmin" de gerçek değerin kendisidir.
-                # embedding_baseline: "hedef-durum" (goal-conditioned) mimarinin
+                # embedding_baseline_goal: "hedef-durum" (goal-conditioned) mimarinin
                 # ilaç-öncesi referans noktası -- BU trajectory'nin frame 0'ı,
                 # rollout boyunca SABİT kalır (bkz. GoalConditionedPredictor).
                 state = build_state_vector(p_r, v_r, covariates, current_hr=frame["current_hr"])
-                state_norm = norm_stats.normalize_state(state).astype(np.float32)
-                embedding = encoder(torch.from_numpy(state_norm).unsqueeze(0).to(device))
-                embedding_baseline = embedding
+
+                state_norm_goal = norm_stats_goal.normalize_state(state).astype(np.float32)
+                embedding_goal = encoder_goal(torch.from_numpy(state_norm_goal).unsqueeze(0).to(device))
+                embedding_baseline_goal = embedding_goal
+
+                state_norm_delta = norm_stats_delta.normalize_state(state).astype(np.float32)
+                embedding_delta = encoder_delta(torch.from_numpy(state_norm_delta).unsqueeze(0).to(device))
+
                 pred_vals = dict(true_vals)
             else:
                 action_raw = np.array([[frame["conc_mg_L"]]], dtype=np.float32)
-                action_norm = norm_stats.normalize_action(action_raw).astype(np.float32)
-                action_t = torch.from_numpy(action_norm).to(device)
-                embedding, _ = goal_predictor(embedding, embedding_baseline, action_t)
-                decoded_norm = decoder(embedding).cpu().numpy()[0]
-                pred_vals = {
-                    field: float(norm_stats.denormalize_scalar(field, decoded_norm[i]))
+
+                action_norm_goal = norm_stats_goal.normalize_action(action_raw).astype(np.float32)
+                action_t_goal = torch.from_numpy(action_norm_goal).to(device)
+                embedding_goal, _ = goal_predictor(embedding_goal, embedding_baseline_goal, action_t_goal)
+                decoded_norm_goal = decoder_goal(embedding_goal).cpu().numpy()[0]
+                pred_vals_goal = {
+                    field: float(norm_stats_goal.denormalize_scalar(field, decoded_norm_goal[i]))
                     for i, field in enumerate(SCALAR_TARGET_FIELDS)
+                }
+
+                action_norm_delta = norm_stats_delta.normalize_action(action_raw).astype(np.float32)
+                action_t_delta = torch.from_numpy(action_norm_delta).to(device)
+                embedding_delta = predict_next_embedding(predictor_delta, embedding_delta, action_t_delta)
+                decoded_norm_delta = decoder_delta(embedding_delta).cpu().numpy()[0]
+                pred_vals_delta = {
+                    field: float(norm_stats_delta.denormalize_scalar(field, decoded_norm_delta[i]))
+                    for i, field in enumerate(SCALAR_TARGET_FIELDS)
+                }
+
+                pred_vals = {
+                    field: (pred_vals_goal if JEPA_FIELD_SOURCE[field] == "goal" else pred_vals_delta)[field]
+                    for field in SCALAR_TARGET_FIELDS
                 }
 
             row = {"frame_idx": frame["frame_idx"], "elapsed_min": frame["elapsed_min"],
@@ -1595,15 +1648,16 @@ with tab_jepa:
         "hesapladığı değerle yan yana gösteriliyor."
     )
     st.warning(
-        "**Bu model henüz üretim/karar-destek amaçlı DEĞİL.** \"Hedef-durum\" "
-        "(goal-conditioned) mimarisiyle eğitildi -- EF/Nabız/LVEDV/LVESV'de "
-        "test setinde 3 farklı eğitim tekrarında (seed) TUTARLI şekilde "
-        "yüksek isabet gösteriyor (40. dakika R² ~0.98-0.99). **Kardiyak "
-        "debi (CO) hariç** -- CO tahmini eğitim tekrarları arasında TUTARSIZ "
-        "(bazı tekrarlarda 'hiçbir şey değişmedi' varsayımından bile kötü), "
-        "bu yüzden CO grafiğine güvenilmemeli; bilinçli olarak henüz "
-        "düzeltilmedi. Sadece araştırma/gösterim amaçlıdır. Detaylı deney "
-        "sonuçları için proje_detayli_anlatim.html Bölüm 8 ve logs/SUMMARY_1560.md."
+        "**Bu model henüz üretim/karar-destek amaçlı DEĞİL.** **HİBRİT** "
+        "çalışıyor -- Nabız/LVEDV/LVESV yeni \"hedef-durum\" (goal-"
+        "conditioned) mimariden geliyor (3 farklı eğitim tekrarında/seed'de "
+        "TUTARLI şekilde eski modeli geçiyor), **EF ve CO ise eski (delta-"
+        "tabanlı) modelden** -- çünkü yeni mimari EF'de ilacın erken zirve "
+        "anlarında (ör. ilk ~5 dakika) gerçek eğrinin TERSİ yönde hareket "
+        "edebiliyor (α-karışımının gecikme etkisi), CO'da ise eğitim "
+        "tekrarları arasında tutarsız. Sadece araştırma/gösterim "
+        "amaçlıdır. Detaylı deney sonuçları için proje_detayli_anlatim.html "
+        "Bölüm 8 ve logs/SUMMARY_1560.md."
     )
 
     # ADIM 6: eskiden SADECE drugs[0]'ın sınıfına bakılıyordu -- N ilaç
