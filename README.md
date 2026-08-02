@@ -32,6 +32,7 @@ Uygulamayı doğrudan tarayıcıdan açmak için: https://klinik-pkpd-world-mode
 14. [Kurulum & çalıştırma](#14-kurulum--çalıştırma)
 15. [Proje yapısı](#15-proje-yapısı)
 16. [N-İlaç (Polifarmasi) Genellemesi](#16-n-ilaç-polifarmasi-genellemesi)
+17. [JEPA — Öğrenilmiş Dünya Modeli](#17-jepa--öğrenilmiş-dünya-modeli)
 
 ---
 
@@ -597,3 +598,105 @@ ayrı dosyalarda.
 Detaylar için: `N_DRUG_AUDIT.md` (denetim), `RESEARCH_N_DRUG.md`
 (literatür + ADR), `CALIBRATION_REPORT.md` §10 (CircAdapt eşikleri),
 `N_DRUG_REPORT.md` (nihai özet).
+
+## 17. JEPA — Öğrenilmiş Dünya Modeli
+
+CircAdapt güvenilir ama yavaş. **JEPA** (Joint Embedding Predictive
+Architecture), CircAdapt'in ürettiği 1560 simülasyondan (farklı hasta
+profili × ilaç dozu, her biri 40 dakika/16 kare) öğrenerek, fiziği hiç
+bilmeden kalbin bir sonraki anını **embedding uzayında** (piksel/ham
+veri uzayında değil) tahmin eden bir sinir ağı -- Streamlit'te "JEPA
+Dünya Modeli (Deneysel)" sekmesi. 26 trajectory hiç eğitime sokulmadı,
+sadece test için ayrıldı.
+
+Mimari: **Encoder** (state → 64 boyutlu embedding), **Target Encoder**
+(EMA, gradyan almayan yavaş kopya -- collapse'e karşı ikinci savunma
+hattı, birincisi varyans cezası), **Predictor** (embedding uzayında
+tahmin), ayrı ve denetimli eğitilen **Decoder** (embedding → EF, CO,
+Nabız, LVEDV, LVESV). Değerlendirme, eğitimde hiç görülmemiş 26
+trajectory'de **otoregresif rollout** ile yapılır: model kendi
+tahminini bir sonraki adımın girdisi yapar, gerçek veri hiç araya
+girmez, 16 adım (40 dakika) sonunda MAE/R² ölçülür.
+
+### Delta-tahminden hedef-durum (goal-conditioned) mimariye geçiş
+
+İlk (delta-tabanlı) `Predictor`, `embeddingₜ₊₁ = embeddingₜ +
+Predictor(embeddingₜ, actionₜ)` formülüyle sınırsız bir "fark"
+ekliyordu -- zayıf/yavaş aksiyonlarda en güvenli çözüm delta≈0'a
+yakınsamaktı, bu da otoregresif rollout'ta hata birikimine
+(compounding error) yol açıyordu: ilk hareket doğru tahmin ediliyor,
+ufuk uzadıkça model gerçek eğriden sürükleniyordu.
+
+Kullanıcının önerisiyle (`worldmodel/learned_dynamics/model.py >
+GoalConditionedPredictor`), `transient_integration.py`'nin CircAdapt
+tarafında zaten kullandığı "her adımda mutlak hedefi taze hesapla,
+önceki adımdan hafıza yok" mantığının embedding-uzayındaki karşılığı
+uygulandı:
+
+```
+goalₜ = embedding_baseline + goal_net(actionₜ)
+embeddingₜ₊₁ = (1-α)·embeddingₜ + α·goalₜ         (α = 0.7, sabit)
+```
+
+`embedding_baseline`, trajectory'nin ilaç-öncesi (t=0) karesinin
+embedding'i -- rollout boyunca sabit. Kayıp fonksiyonu:
+`MSE(tahmini, TargetEnc(stateₜ₊₁)) + 0.05·mean(ReLU(1.0 - std(e)))`
+(`train_jepa.py > variance_regularization`).
+
+### Deney günlüğü (`scripts/train_goal_jepa_experiment.py`)
+
+1. **α + gradient clipping taraması** (α ∈ {0.3, 0.5, 0.7}) -- α=0.7
+   son-adım isabetinde en iyisi.
+2. **Weight decay + embedding L2 cezası** -- varyans cezası sadece ALT
+   sınır koyuyordu (std≥1), üst sınır yoktu; L2=1e-3 (weight decay'siz)
+   en iyi kombinasyon.
+3. **Düşük öğrenme oranı + güçlü L2** -- eğitim ıraksamasını (epoch
+   9→17) sadece geciktirdi, önlemedi.
+4. **Stabil (EMA) hedef referansı hipotezi** -- `embedding_baseline`'ı
+   hızlı değişen online Encoder yerine Target Encoder'dan hesaplama --
+   ÇÜRÜTÜLDÜ, daha erken ıraksadı.
+5. **Şampiyon ayar (α=0.7, L2=1e-3) × 3 seed** -- sonucun tesadüf
+   olmadığını doğrulamak için.
+
+Eğitim, denenen tüm varyantlarda ~epoch 9-17'de "ıraksıyor" (loss
+patlıyor) -- kök sebep henüz tam çözülmedi, en iyi val_loss'taki
+checkpoint kullanılıyor (200 epoch'un ~%10'u, undertrained).
+
+### 3-seed sonucu (40. dakika R², eski canlı model vs yeni)
+
+| Metrik | Eski | Yeni (3-seed ort.) | Not |
+|---|---|---|---|
+| EF | 0.990 | 0.995 | gerçek senaryoda erken-zirve gecikmesi bulundu |
+| Nabız | 0.977 | 0.991 | tutarlı, 3/3 seed'de kazanç |
+| LVEDV | 0.943 | 0.986 | tutarlı, 3/3 seed'de kazanç |
+| LVESV | 0.985 | 0.996 | tutarlı, MAE de küçük |
+| CO | 0.209 | -0.48 … +0.21 | seed'e göre değişken, güvenilmez |
+
+### Canlıda çalışan karar: hibrit model
+
+Gerçek bir senaryoda (Esmolol + varsayılan hasta) test edilince,
+pooled/havuzlanmış R²'nin gizlediği iki sorun bulundu: **EF**, ilacın
+erken zirvesinde (0-5 dk) gerçek eğrinin TERSİ yönde hareket ediyordu
+(α-karışımının yarattığı gecikme/aşırı-tepki etkisi); **CO** seed'ler
+arası tutarsızdı (1/3 seed'de R²=-0.475'e çöktü). Bu yüzden
+`streamlit_app.py` **iki modeli paralel çalıştırıp** alan bazında
+birleştiriyor (`JEPA_FIELD_SOURCE`): **Nabız + LVEDV + LVESV** → yeni
+(goal-conditioned) model, **EF + CO** → eski (delta) model
+(`models/dynamics_jepa_transient_1560run_1560data_seed0`, hâlâ diskte,
+kaldırılmadı).
+
+### Bilinen sınırlar (dürüstçe)
+
+- Goal-conditioned modelin eğitimi hiçbir varyantta 200 epoch'u
+  tamamlayamadı (~epoch 9-17'de ıraksıyor) -- undertrained, potansiyel
+  olarak daha da iyileştirilebilir.
+- CO tahmini, mimari ne olursa olsun (eski ya da yeni) güvenilir
+  değil -- eski modelde de pooled R²=0.126 gibi düşük.
+- Tek-trajectory testlerde R², gerçek değerlerin varyansı düşükse
+  (örn. hızlı sönümlenen bir ilaç etkisi) yanıltıcı olabilir -- MAE'ye
+  de bakılmalı (bkz. Streamlit JEPA sekmesindeki uyarı kutusu).
+- Sadece **beta-bloker** ve **pozitif inotrop** sınıfı ilaçlarla
+  eğitildi.
+
+Detaylı deney sonuçları: `logs/SUMMARY_1560.md`,
+`proje_detayli_anlatim.html` Bölüm 8.
