@@ -33,7 +33,13 @@ https://framework.circadapt.org/files/circadapt-2602-py3-none-win_amd64.whl ; sy
 # src/worldmodel/learned_dynamics/ (JEPA -- öğrenilmiş dinamik model, bkz. o
 # paketin __init__.py'si) bağımlılığı -- projenin geri kalanı (numpy/pandas/
 # scipy) hiç autodiff/sinir ağı kullanmaz, bu SADECE bu alt-pakete özel.
-# Varsayılan pip kurulumu CPU sürümünü getirir; GPU'nuz varsa CUDA'ya özel
-# bir wheel'i (https://pytorch.org/get-started/locally/) elle kurabilirsiniz
-# -- kod `torch.cuda.is_available()` ile otomatik algılar, GPU ŞART DEĞİL.
+# ÖNEMLİ: PyPI'nin varsayılan Linux torch wheel'i CUDA kütüphaneleriyle
+# (nvidia-cublas-cu12, nvidia-cudnn-cu12 vb.) birlikte gelir -- kurulum
+# boyutu ~2-5GB'a çıkar ve bu, Streamlit Community Cloud'un kaynak
+# sınırını aşıp deploy'un "ImportError ... redacted" genel hatasıyla
+# çökmesine yol açar (GPU zaten kullanılmıyor, kod her yerde
+# `torch.cuda.is_available()` ile otomatik CPU'ya düşüyor). Bu yüzden
+# aşağıdaki --extra-index-url ile PyTorch'un resmi CPU-only wheel
+# deposu ekleniyor -- CUDA paketleri hiç indirilmiyor.
+--extra-index-url https://download.pytorch.org/whl/cpu
 torch>=2.2
