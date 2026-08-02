@@ -35,6 +35,19 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import streamlit as st
 import torch
+
+# patient_profile/llm_extraction.py Gemini istemcisini SADECE os.environ'dan
+# ("GEMINI_API_KEY") okur -- Streamlit Cloud'un "Secrets" panelinden girilen
+# değerler önce st.secrets'a düşer, üst seviye (bölümsüz) anahtarlar genelde
+# otomatik olarak os.environ'a da yansır ama bu her sürüm/yapılandırmada
+# garanti değil. Burada açıkça köprü kuruyoruz ki secrets.toml'da nasıl
+# tanımlanmış olursa olsun (üst seviye ya da [section] altında) çalışsın.
+if "GEMINI_API_KEY" not in os.environ:
+    try:
+        os.environ["GEMINI_API_KEY"] = st.secrets["GEMINI_API_KEY"]
+    except Exception:
+        pass
+
 from worldmodel.patient import Patient, load_drugs, load_drug_interactions, load_drug_pk_interactions
 from worldmodel.simulation import (
     run_monte_carlo, run_polypharmacy_simulation, run_polypharmacy_simulation_loewe,
